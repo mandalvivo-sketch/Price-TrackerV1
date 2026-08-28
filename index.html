@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Mobile Price Tracker</title>
+  <meta name="description" content="Mobile price tracking system with live history, IMEI scanning, and Supabase integration." />
+  <link rel="stylesheet" href="style.css?v=20260828" />
+  <!-- Supabase JS Client via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Bundled locally so barcode scanning works without relying on a CDN. -->
+  <script src="html5-qrcode.min.js"></script>
+</head>
+<body>
+
+  <div class="app-container" id="app">
+    
+    <!-- Top Header -->
+    <header class="app-header" id="appHeader">
+      <div class="header-top" id="headerTop">
+        <div class="brand-title" id="brandTitle">
+          <div class="app-icon" id="appIcon">₹</div>
+          <div class="title-text" id="titleText">
+            <h1>Price Tracker</h1>
+            <div class="status-tag" id="statusTag">
+              <span class="status-dot" id="statusDot"></span>
+              <span id="statusLabel">Loading...</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="header-actions" id="headerActions">
+          <button class="btn btn-primary btn-sm" id="btnOpenAddModal">
+            + Add Mobile
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Search Bar -->
+      <div class="search-box" id="searchBox">
+        <span class="search-icon">🔍</span>
+        <input 
+          type="text" 
+          class="search-input" 
+          id="searchInput" 
+          placeholder="Search Brand, Model, Variant, Color, IMEI..." 
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button class="search-clear-btn" id="btnSearchClear" title="Clear Search">✕</button>
+      </div>
+    </header>
+
+    <!-- Brand Filter Pills Bar -->
+    <nav class="brand-filters-wrapper" id="brandFiltersWrapper" aria-label="Brand Filter">
+      <div class="brand-pills" id="brandPillsContainer">
+        <button class="brand-pill active" data-brand="ALL" id="pillBrandAll">All Brands</button>
+        <!-- Dynamic Brand Pills will be injected here -->
+      </div>
+    </nav>
+
+    <!-- Summary Info Bar -->
+    <div class="summary-bar" id="summaryBar">
+      <div class="summary-count" id="summaryCount">Showing 0 Mobiles</div>
+    </div>
+
+    <!-- Main Content: Current Price List -->
+    <main class="main-content" id="mainContent">
+
+      <!-- Mobile/Tablet Compact Card View -->
+      <div class="product-list" id="productListContainer">
+        <!-- Injected via JavaScript -->
+      </div>
+
+      <!-- Desktop Table View -->
+      <div class="desktop-table-container" id="desktopTableContainer">
+        <table class="desktop-table" id="desktopTable">
+          <thead>
+            <tr>
+              <th>Brand & Model</th>
+              <th>Variant</th>
+              <th>Color</th>
+              <th class="text-right">DP</th>
+              <th class="text-right">MOP</th>
+              <th class="text-right">MRP</th>
+              <th class="text-center">IMEIs</th>
+              <th class="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="desktopTableBody">
+            <!-- Injected via JavaScript -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Empty State -->
+      <div class="empty-state hidden" id="emptyState">
+        <div class="empty-icon">📱</div>
+        <div class="empty-title" id="emptyTitle">No mobiles found</div>
+        <div class="empty-desc" id="emptyDesc">Try adjusting your search query or add a new mobile product.</div>
+        <button class="btn btn-primary" id="btnEmptyAdd">+ Add First Mobile</button>
+      </div>
+
+    </main>
+
+    <!-- Floating Action Button for Fast Mobile Entry -->
+    <button class="fab-add" id="fabAddProduct" title="Add Mobile Product" aria-label="Add Product">
+      +
+    </button>
+
+  </div>
+
+  <!-- ================= MODALS & DRAWERS ================= -->
+
+  <!-- 1. Add / Edit Product Modal -->
+  <div class="modal-overlay" id="productModalOverlay">
+    <div class="modal-card" id="productModalCard">
+      <div class="modal-header">
+        <h2 id="productModalTitle">Add Mobile Product</h2>
+        <button class="modal-close-btn" id="btnCloseProductModal">✕</button>
+      </div>
+      <form id="productForm">
+        <div class="modal-body">
+          <input type="hidden" id="editProductId" value="" />
+
+          <!-- Brand Selection with Add Brand inline -->
+          <div class="form-group">
+            <label class="form-label" for="productBrandSelect">Brand <span style="color:var(--danger)">*</span></label>
+            <div class="input-with-button">
+              <select class="form-select" id="productBrandSelect" required>
+                <option value="">-- Select Brand --</option>
+              </select>
+              <button type="button" class="btn btn-secondary btn-sm" id="btnInlineAddBrand" title="Add New Brand">
+                + New
+              </button>
+            </div>
+          </div>
+
+          <!-- Model Name -->
+          <div class="form-group">
+            <label class="form-label" for="productModelInput">Model Name <span style="color:var(--danger)">*</span></label>
+            <input type="text" class="form-input" id="productModelInput" placeholder="e.g. X200, S25, 13 Pro" required />
+          </div>
+
+          <!-- Variant & Color -->
+          <div class="form-row-2">
+            <div class="form-group">
+              <label class="form-label" for="productVariantInput">Variant <span class="optional">(Optional)</span></label>
+              <input type="text" class="form-input" id="productVariantInput" placeholder="e.g. 12/256, 8/128" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="productColorInput">Color <span class="optional">(Optional)</span></label>
+              <input type="text" class="form-input" id="productColorInput" placeholder="e.g. Titanium, Black" />
+            </div>
+          </div>
+
+          <!-- Price Triple: DP, MOP, MRP -->
+          <div class="form-row-3">
+            <div class="form-group">
+              <label class="form-label" for="productDpInput">DP <span style="color:var(--danger)">*</span></label>
+              <div class="price-input-wrapper">
+                <span class="currency-prefix">₹</span>
+                <input type="number" class="form-input" id="productDpInput" placeholder="52000" min="0" step="1" required />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="productMopInput">MOP <span style="color:var(--danger)">*</span></label>
+              <div class="price-input-wrapper">
+                <span class="currency-prefix">₹</span>
+                <input type="number" class="form-input" id="productMopInput" placeholder="54999" min="0" step="1" required />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="productMrpInput">MRP <span style="color:var(--danger)">*</span></label>
+              <div class="price-input-wrapper">
+                <span class="currency-prefix">₹</span>
+                <input type="number" class="form-input" id="productMrpInput" placeholder="59999" min="0" step="1" required />
+              </div>
+            </div>
+          </div>
+
+          <!-- IMEI Number Field (Unique unit identifier) -->
+          <div class="form-group" id="productImeiFieldGroup">
+            <label class="form-label" for="productImeiInput">
+              IMEI Number <span class="optional" id="productImeiOptionalTag">(Unique 15 Digits / Barcode)</span>
+            </label>
+            <div class="input-with-button">
+              <input 
+                type="text" 
+                class="form-input font-mono" 
+                id="productImeiInput" 
+                placeholder="e.g. 864209051234567" 
+                maxlength="20"
+                autocomplete="off"
+              />
+              <button type="button" class="btn btn-secondary" id="btnProductScanImei" title="Scan IMEI using Camera">
+                📷 Scan
+              </button>
+            </div>
+            <div id="productImeiValidationMsg" class="scanner-hint hidden" style="text-align:left; margin-top:4px;"></div>
+          </div>
+
+          <div id="editPriceNote" class="scanner-hint hidden" style="text-align:left; color:var(--primary); margin-top:8px;">
+            ℹ️ If DP, MOP, or MRP are changed, a price history snapshot will automatically be archived.
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btnCancelProduct">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btnSaveProduct">Save Product</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. Price History Modal -->
+  <div class="modal-overlay" id="historyModalOverlay">
+    <div class="modal-card" id="historyModalCard">
+      <div class="modal-header">
+        <div>
+          <h2 id="historyModalTitle">Price History</h2>
+          <div style="font-size:12px; color:var(--text-muted);" id="historyModalSubtitle">Product Pricing Logs</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button type="button" class="btn btn-secondary btn-sm hidden" id="btnClearAllHistory" title="Clear all price history records for this product" style="font-size:11.5px; padding:3px 8px; color:var(--danger); border-color:rgba(239,68,68,0.3);">
+            🗑️ Clear All
+          </button>
+          <button class="modal-close-btn" id="btnCloseHistoryModal">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div id="historyTimelineContainer" class="history-timeline">
+          <!-- Injected via JavaScript -->
+        </div>
+        <div id="historyEmptyState" class="empty-state hidden" style="padding:24px 12px; margin:0;">
+          <div style="font-size:24px; margin-bottom:6px;">📊</div>
+          <div class="empty-title" style="font-size:14px;">No price changes yet</div>
+          <div class="empty-desc" style="font-size:12px; margin-bottom:0;">
+            When you edit and update prices for this product, previous prices will be logged here.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btnCloseHistoryFooter">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. IMEI Management Modal -->
+  <div class="modal-overlay" id="imeiModalOverlay">
+    <div class="modal-card" id="imeiModalCard" style="max-width: 580px;">
+      <div class="modal-header">
+        <div>
+          <h2>IMEI Management</h2>
+          <div style="font-size:12px; color:var(--text-muted);" id="imeiModalSubtitle">Product IMEIs</div>
+        </div>
+        <button class="modal-close-btn" id="btnCloseImeiModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- Add / Edit IMEI Form -->
+        <form id="imeiAddForm" style="background:#f8fafc; border:1px solid var(--border-color); border-radius:var(--radius-md); padding:12px; margin-bottom:14px;">
+          <input type="hidden" id="editingImeiId" value="" />
+          <input type="hidden" id="editingOldImei" value="" />
+          
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+            <label class="form-label" for="imeiInput" id="imeiFormTitle" style="margin-bottom:0; font-weight:700;">
+              Add New IMEI (15 Digits / Barcode) <span style="color:var(--danger)">*</span>
+            </label>
+            <button type="button" class="btn btn-secondary btn-sm hidden" id="btnCancelEditImei" style="font-size:11px; padding:2px 8px; min-height:24px;">
+              ✕ Cancel Edit
+            </button>
+          </div>
+
+          <div class="input-with-button" style="margin-bottom:8px;">
+            <input 
+              type="text" 
+              class="form-input font-mono" 
+              id="imeiInput" 
+              placeholder="e.g. 864209051234567" 
+              maxlength="20"
+              autocomplete="off"
+              required
+            />
+            <button type="button" class="btn btn-secondary" id="btnLaunchScanner" title="Scan IMEI using Camera">
+              📷 Scan
+            </button>
+          </div>
+
+          <!-- Unit-Specific Price & Note Fields -->
+          <div style="background:#ffffff; border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:8px 10px; margin-bottom:10px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+              <span style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-secondary);">
+                Unit Specific Pricing (Optional Override)
+              </span>
+              <button type="button" class="btn btn-secondary btn-sm" id="btnResetImeiPriceToDefault" style="font-size:10.5px; padding:2px 6px; min-height:22px;">
+                ↺ Fill Base Price
+              </button>
+            </div>
+            
+            <div class="form-row-3" style="margin-bottom:6px;">
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" style="font-size:11px; margin-bottom:2px;" for="imeiDpInput">Unit DP (₹)</label>
+                <input type="number" class="form-input font-mono" id="imeiDpInput" placeholder="DP" min="0" step="1" style="height:34px; font-size:12.5px;" />
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" style="font-size:11px; margin-bottom:2px;" for="imeiMopInput">Unit MOP (₹)</label>
+                <input type="number" class="form-input font-mono" id="imeiMopInput" placeholder="MOP" min="0" step="1" style="height:34px; font-size:12.5px;" />
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" style="font-size:11px; margin-bottom:2px;" for="imeiMrpInput">Unit MRP (₹)</label>
+                <input type="number" class="form-input font-mono" id="imeiMrpInput" placeholder="MRP" min="0" step="1" style="height:34px; font-size:12.5px;" />
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0;">
+              <input type="text" class="form-input" id="imeiNotesInput" placeholder="Unit note/remark (e.g. Batch A, Grade A, Promo unit)" style="height:32px; font-size:12px;" />
+            </div>
+          </div>
+
+          <div style="display:flex; gap:8px;">
+            <button type="submit" class="btn btn-primary" id="btnAddImeiBtn" style="flex:1;">
+              + Save IMEI
+            </button>
+          </div>
+          <div id="imeiValidationMsg" class="scanner-hint hidden" style="text-align:left; margin-top:6px;"></div>
+        </form>
+
+        <!-- Stored IMEIs List -->
+        <div class="imei-list-wrapper">
+          <div class="imei-list-header">
+            <span id="imeiListCountLabel">Stored IMEIs (0)</span>
+          </div>
+          <div class="imei-list" id="imeiItemsList">
+            <!-- Dynamic IMEI Items with Edit & Delete actions -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btnCloseImeiFooter">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Camera IMEI Barcode Scanner Modal -->
+  <div class="modal-overlay" id="scannerModalOverlay">
+    <div class="modal-card" id="scannerModalCard" style="max-width: 400px;">
+      <div class="modal-header">
+        <h2>Scan Code 128 IMEI Barcode</h2>
+        <button class="modal-close-btn" id="btnCloseScannerModal">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 12px; text-align: center;">
+        <div class="scanner-viewport">
+          <div id="reader"></div>
+        </div>
+        <p class="scanner-hint">
+          Hold the Code 128 IMEI barcode inside the wide guide. The rear camera will use continuous autofocus when supported.
+        </p>
+        <div style="margin-top:10px; display:flex; justify-content:center; gap:8px;">
+          <button type="button" class="btn btn-secondary btn-sm" id="btnSwitchCamera">
+            🔄 Switch Camera
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btnStopScanner">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Add Brand Modal -->
+  <div class="modal-overlay" id="brandModalOverlay">
+    <div class="modal-card" id="brandModalCard" style="max-width: 360px;">
+      <div class="modal-header">
+        <h2>Add Smartphone Brand</h2>
+        <button class="modal-close-btn" id="btnCloseBrandModal">✕</button>
+      </div>
+      <form id="brandForm">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="newBrandNameInput">Brand Name <span style="color:var(--danger)">*</span></label>
+            <input type="text" class="form-input" id="newBrandNameInput" placeholder="e.g. Motorola, Poco, Honor" required />
+          </div>
+          <div class="form-group" style="border-top:1px solid var(--border-color); padding-top:12px; margin-top:14px;">
+            <label class="form-label" for="deleteBrandSelect">Delete Brand</label>
+            <div class="input-with-button">
+              <select class="form-select" id="deleteBrandSelect">
+                <option value="">-- Select Brand --</option>
+              </select>
+              <button type="button" class="btn btn-danger btn-sm" id="btnDeleteBrand">Delete</button>
+            </div>
+            <div class="scanner-hint" style="text-align:left; margin-top:4px;">A brand cannot be deleted while products use it.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btnCancelBrand">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btnSaveBrand">Save Brand</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Confirm Delete Modal -->
+  <div class="modal-overlay" id="deleteModalOverlay">
+    <div class="modal-card" id="deleteModalCard" style="max-width: 380px;">
+      <div class="modal-header">
+        <h2>Delete Product</h2>
+        <button class="modal-close-btn" id="btnCloseDeleteModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:14px; color:var(--text-primary); font-weight:600; margin-bottom:8px;">
+          Are you sure you want to delete this product?
+        </p>
+        <p style="font-size:13px; color:var(--text-secondary);" id="deleteProductDetails">
+          vivo X200 (12/256)
+        </p>
+        <p style="font-size:12px; color:var(--danger); margin-top:8px;">
+          ⚠️ This will permanently remove its price history and associated IMEIs.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btnCancelDelete">Cancel</button>
+        <button type="button" class="btn btn-danger" id="btnConfirmDelete">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Application Logic Scripts -->
+  <script src="supabase.js?v=20260828"></script>
+  <script src="app.js?v=20260828"></script>
+</body>
+</html>
