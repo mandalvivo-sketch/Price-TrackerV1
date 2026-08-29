@@ -128,6 +128,15 @@ body {
   flex-shrink: 0;
 }
 
+.app-menu-trigger {
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.app-menu-trigger:hover { filter: brightness(1.08); }
+.app-menu-trigger:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
 .title-text h1 {
   font-size: 17px;
   font-weight: 700;
@@ -442,6 +451,33 @@ body {
   margin-top: 6px;
 }
 
+/* Dashboard drill-down: model → variant → individual IMEIs */
+.model-drilldown {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.model-drilldown summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px;
+}
+
+.model-drilldown summary::-webkit-details-marker { display: none; }
+.model-drilldown summary::after { content: '›'; color: var(--text-muted); font-size: 22px; line-height: 1; }
+.model-drilldown[open] summary::after { transform: rotate(90deg); }
+.model-summary-count { color: var(--text-muted); font-size: 12px; font-weight: 600; margin-left: auto; }
+.variant-list { display: flex; flex-direction: column; gap: 8px; padding: 0 10px 10px; }
+.variant-product-card { box-shadow: none; background: var(--bg-subtle); }
+.model-drilldown-cell { padding: 8px !important; background: var(--bg-surface) !important; }
+.model-drilldown-cell .model-drilldown { border: 0; box-shadow: none; }
+
 .product-card {
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
@@ -545,6 +581,23 @@ body {
 .price-val.dp { color: var(--dp-color); }
 .price-val.mop { color: var(--mop-color); }
 .price-val.mrp { color: var(--mrp-color); }
+
+/* The original entry price appears only after a price has changed. */
+.price-entry {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 3px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.price-entry.dp { color: #4338ca; background: #ddd6fe; }
+.price-entry.mop { color: #047857; background: #bbf7d0; }
+.price-entry.mrp { color: #9a3412; background: #fed7aa; }
 
 /* Card Footer: IMEIs + Actions */
 .card-footer-row {
@@ -1283,6 +1336,14 @@ body {
 
 /* Utility Classes */
 .hidden { display: none !important; }
+
+/* Offline state and database tools drawer */
+.offline-notice { position:fixed; top:8px; left:50%; transform:translateX(-50%); z-index:500; width:min(94%, 540px); padding:10px 14px; border-radius:var(--radius-md); background:#fff7ed; border:1px solid #fdba74; color:#9a3412; text-align:center; font-size:12px; font-weight:700; box-shadow:var(--shadow-md); }
+.side-menu-overlay { position:fixed; inset:0; z-index:310; background:rgba(15,23,42,.44); opacity:0; visibility:hidden; transition:.2s; }
+.side-menu { position:fixed; z-index:311; top:0; right:0; bottom:0; width:min(330px, 88vw); padding:18px; background:var(--bg-surface); box-shadow:-12px 0 30px rgba(15,23,42,.18); transform:translateX(105%); transition:transform .25s ease; display:flex; flex-direction:column; gap:8px; }
+.side-menu.open { transform:translateX(0); }.side-menu-overlay.open { opacity:1; visibility:visible; }
+.side-menu-header { display:flex; align-items:center; justify-content:space-between; padding:4px 0 14px; border-bottom:1px solid var(--border-color); margin-bottom:4px; }.side-menu-header strong { display:block; font-size:18px; }.side-menu-header span { display:block; color:var(--text-muted); font-size:12px; margin-top:2px; }
+.side-menu-link { display:flex; align-items:center; gap:10px; width:100%; padding:12px; border:1px solid var(--border-color); border-radius:var(--radius-md); background:var(--bg-surface); color:var(--text-primary); text-decoration:none; text-align:left; font:inherit; font-size:13px; font-weight:700; cursor:pointer; }.side-menu-link:hover { background:var(--bg-subtle); }.side-menu-link.restore { color:var(--danger); border-color:#fecaca; }.side-menu-warning { margin-top:8px; padding:10px; color:#9a3412; background:#fff7ed; border-radius:var(--radius-sm); font-size:11px; line-height:1.45; }
 .text-right { text-align: right; }
 .text-center { text-align: center; }
 .font-mono { font-family: var(--font-mono); }

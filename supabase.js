@@ -552,6 +552,115 @@ class SupabaseService {
     return products;
   }
 
+  async fetchAllImeis() {
+    if (this.isLive && this.client) {
+      try {
+        const { data, error } = await this.client.from('imeis').select('*');
+        if (!error && Array.isArray(data)) return data;
+        if (error) console.warn('fetchAllImeis live error:', error);
+      } catch (err) {
+        console.warn('fetchAllImeis live query failed:', err);
+      }
+    }
+    return JSON.parse(localStorage.getItem(STORAGE_KEYS.IMEIS) || '[]');
+  }
+
+  async createBackup() {
+    let brands = JSON.parse(localStorage.getItem(STORAGE_KEYS.BRANDS) || '[]');
+    let products = JSON.parse(localStorage.getItem(STORAGE_KEYS.PRODUCTS) || '[]');
+    let imeis = JSON.parse(localStorage.getItem(STORAGE_KEYS.IMEIS) || '[]');
+    let priceHistory = JSON.parse(localStorage.getItem(STORAGE_KEYS.PRICE_HISTORY) || '[]');
+    if (this.isLive && this.client) {
+      const [brandResult, productResult, imeiResult, historyResult] = await Promise.all([
+        this.client.from('brands').select('*'), this.client.from('products').select('*'),
+        this.client.from('imeis').select('*'), this.client.from('price_history').select('*')
+      ]);
+      if (brandResult.error || productResult.error || imeiResult.error || historyResult.error) throw new Error('Could not read all database tables for backup');
+      brands = brandResult.data || []; products = productResult.data || []; imeis = imeiResult.data || []; priceHistory = historyResult.data || [];
+    }
+    return { app: 'Mobile Price Tracker', version: 1, exported_at: new Date().toISOString(), brands, products, imeis, price_history: priceHistory };
+  }
+
+  async syncOnlineDataToLocal() {
+    if (!this.isLive || !this.client) throw new Error('Online database is not connected');
+    const [brandResult, productResult, imeiResult, historyResult] = await Promise.all([
+      this.client.from('brands').select('*'), this.client.from('products').select('*'),
+      this.client.from('imeis').select('*'), this.client.from('price_history').select('*')
+    ]);
+    const failed = [brandResult, productResult, imeiResult, historyResult].find(result => result.error);
+    if (failed) throw new Error(failed.error.message || 'Could not download online data');
+    localStorage.setItem(STORAGE_KEYS.BRANDS, JSON.stringify(brandResult.data || []));
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(productResult.data || []));
+    localStorage.setItem(STORAGE_KEYS.IMEIS, JSON.stringify(imeiResult.data || []));
+    localStorage.setItem(STORAGE_KEYS.PRICE_HISTORY, JSON.stringify(historyResult.data || []));
+    localStorage.setItem('mpt_last_sync_at', new Date().toISOString());
+    return true;
+  }
+
+  async restoreBackup(backup) {
+    if (!backup || !Array.isArray(backup.brands) || !Array.isArray(backup.products) || !Array.isArray(backup.imeis) || !Array.isArray(backup.price_history)) throw new Error('This is not a valid Mobile Price Tracker backup');
+    const data = { brands: backup.brands, products: backup.products, imeis: backup.imeis, priceHistory: backup.price_history };
+    if (this.isLive && this.client) {
+      const assertOk = (result, action) => { if (result.error) throw new Error(`${action}: ${result.error.message}`); };
+      assertOk(await this.client.from('price_history').delete().neq('id', ''), 'Could not clear price history');
+      assertOk(await this.client.from('imeis').delete().neq('id', ''), 'Could not clear IMEIs');
+      assertOk(await this.client.from('products').delete().neq('id', ''), 'Could not clear products');
+      assertOk(await this.client.from('brands').delete().neq('id', ''), 'Could not clear brands');
+      if (data.brands.length) assertOk(await this.client.from('brands').insert(data.brands), 'Could not restore brands');
+      if (data.products.length) assertOk(await this.client.from('products').insert(data.products), 'Could not restore products');
+      if (data.imeis.length) assertOk(await this.client.from('imeis').insert(data.imeis), 'Could not restore IMEIs');
+      if (data.priceHistory.length) assertOk(await this.client.from('price_history').insert(data.priceHistory), 'Could not restore price history');
+    }
+    localStorage.setItem(STORAGE_KEYS.BRANDS, JSON.stringify(data.brands));
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data.products));
+    localStorage.setItem(STORAGE_KEYS.IMEIS, JSON.stringify(data.imeis));
+    localStorage.setItem(STORAGE_KEYS.PRICE_HISTORY, JSON.stringify(data.priceHistory));
+    return true;
+  }
+
+  async findImeiForSale(imei) {
+    const code = (imei || '').trim();
+    if (!code) return null;
+    let unit, product;
+    if (this.isLive && this.client) {
+      const { data, error } = await this.client.from('imeis').select('*').eq('imei', code).maybeSingle();
+      if (error) throw error;
+      unit = data;
+      if (unit) { const result = await this.client.from('products').select('*').eq('id', unit.product_id).maybeSingle(); if (result.error) throw result.error; product = result.data; }
+    } else {
+      unit = (JSON.parse(localStorage.getItem(STORAGE_KEYS.IMEIS) || '[]')).find(item => item.imei === code);
+      if (unit) product = (JSON.parse(localStorage.getItem(STORAGE_KEYS.PRODUCTS) || '[]')).find(item => String(item.id) === String(unit.product_id));
+    }
+    if (!unit || !product) return null;
+    const first = (await this.fetchInitialPrices([product.id]))[String(product.id)] || {};
+    return { unit, product: { ...product, current_dp: Number(product.current_dp ?? product.dp ?? 0), current_mop: Number(product.current_mop ?? product.mop ?? 0), current_mrp: Number(product.current_mrp ?? product.mrp ?? 0) }, entry_dp: Number(first.dp ?? product.current_dp ?? product.dp ?? 0) };
+  }
+
+  async saveSaleAndRemoveImei(sale) {
+    if (!this.isLive || !this.client) throw new Error('Please connect to the online database before saving a sale');
+    const { product, unit, entry_dp, mop, mrp, remarks } = sale;
+    const priceHistory = await this.fetchPriceHistory(product.id);
+    const payload = { product_id: product.id, imei: unit.imei, brand: product.brand, model: product.model, variant: product.variant, color: product.color, entry_dp: Number(entry_dp), mop: Number(mop), mrp: Number(mrp), remarks: remarks || null, price_history: priceHistory, sold_at: new Date().toISOString() };
+    const insert = await this.client.from('sales').insert([payload]);
+    if (insert.error) throw new Error(insert.error.message);
+    const deleted = await this.client.from('imeis').delete().eq('id', unit.id);
+    if (deleted.error) throw new Error('Sale saved but IMEI could not be removed: ' + deleted.error.message);
+    const remaining = await this.client.from('imeis').select('id').eq('product_id', product.id).limit(1);
+    if (remaining.error) throw remaining.error;
+    if (!remaining.data || remaining.data.length === 0) {
+      const removeProduct = await this.client.from('products').delete().eq('id', product.id);
+      if (removeProduct.error) throw removeProduct.error;
+    }
+    return true;
+  }
+
+  async fetchSales() {
+    if (!this.isLive || !this.client) return [];
+    const { data, error } = await this.client.from('sales').select('*').order('sold_at', { ascending: false }).limit(50);
+    if (error) throw error;
+    return data || [];
+  }
+
   async getProductById(id) {
     if (!id) return null;
 
@@ -617,6 +726,24 @@ class SupabaseService {
         if (!error && data) {
           savedProduct = data;
 
+          // Keep an immutable entry-price record from the moment the model is
+          // added. Later dashboard cards use this to compare the current price.
+          try {
+            const { error: entryHistoryError } = await this.client.from('price_history').insert([{
+              product_id: data.id,
+              old_dp: payload.current_dp,
+              new_dp: payload.current_dp,
+              old_mop: payload.current_mop,
+              new_mop: payload.current_mop,
+              old_mrp: payload.current_mrp,
+              new_mrp: payload.current_mrp,
+              changed_at: data.created_at || new Date().toISOString()
+            }]);
+            if (entryHistoryError) console.warn('Could not save initial price history:', entryHistoryError);
+          } catch (historyErr) {
+            console.warn('Could not save initial price history:', historyErr);
+          }
+
           // If IMEI provided, attach to this product
           if (imei && data.id) {
             try {
@@ -650,6 +777,20 @@ class SupabaseService {
     };
     products.unshift(newProduct);
     localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+
+    const history = JSON.parse(localStorage.getItem(STORAGE_KEYS.PRICE_HISTORY) || '[]');
+    history.unshift({
+      id: 'hist-entry-' + Date.now() + '-' + Math.random().toString(36).substr(2, 7),
+      product_id: newProduct.id,
+      old_dp: payload.current_dp,
+      new_dp: payload.current_dp,
+      old_mop: payload.current_mop,
+      new_mop: payload.current_mop,
+      old_mrp: payload.current_mrp,
+      new_mrp: payload.current_mrp,
+      changed_at: newProduct.created_at
+    });
+    localStorage.setItem(STORAGE_KEYS.PRICE_HISTORY, JSON.stringify(history));
 
     // Save IMEI if provided
     if (imei) {
@@ -841,6 +982,43 @@ class SupabaseService {
   }
 
   // ================= PRICE HISTORY API ================= //
+
+  // Returns the first recorded (entry) prices for products that have since
+  // changed. Products without a price change intentionally have no entry here.
+  async fetchInitialPrices(productIds = []) {
+    const ids = productIds.filter(Boolean);
+    if (!ids.length) return {};
+
+    let records = [];
+    if (this.isLive && this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('price_history')
+          .select('product_id, old_dp, old_mop, old_mrp, changed_at')
+          .in('product_id', ids)
+          .order('changed_at', { ascending: true });
+        if (error) throw error;
+        records = data || [];
+      } catch (err) {
+        console.warn('fetchInitialPrices live error:', err);
+      }
+    }
+
+    // Include local history as a fallback/cache, while preserving the earliest
+    // change for each product.
+    const localHistory = JSON.parse(localStorage.getItem(STORAGE_KEYS.PRICE_HISTORY) || '[]')
+      .filter(record => ids.includes(record.product_id));
+    records = records.concat(localHistory);
+    records.sort((a, b) => new Date(a.changed_at || 0).getTime() - new Date(b.changed_at || 0).getTime());
+
+    return records.reduce((entryPrices, record) => {
+      const id = String(record.product_id);
+      if (!entryPrices[id]) {
+        entryPrices[id] = { dp: record.old_dp, mop: record.old_mop, mrp: record.old_mrp };
+      }
+      return entryPrices;
+    }, {});
+  }
 
   async fetchPriceHistory(productId) {
     if (!productId) return [];
@@ -1412,7 +1590,20 @@ ALTER TABLE IF EXISTS public.imeis ADD COLUMN IF NOT EXISTS notes TEXT;
 ALTER TABLE IF EXISTS public.imeis ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
 `;
 
+const SUPABASE_SALES_MIGRATION_SQL = `-- Run once in Supabase SQL Editor for the Sold IMEI page
+CREATE TABLE IF NOT EXISTS public.sales (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), product_id UUID, imei TEXT NOT NULL,
+  brand TEXT, model TEXT, variant TEXT, color TEXT,
+  entry_dp NUMERIC NOT NULL DEFAULT 0, mop NUMERIC NOT NULL DEFAULT 0, mrp NUMERIC NOT NULL DEFAULT 0,
+  remarks TEXT, price_history JSONB DEFAULT '[]'::jsonb,
+  sold_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.sales ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all access on sales" ON public.sales FOR ALL USING (true) WITH CHECK (true);
+`;
+
 // Global instance
 window.dbService = new SupabaseService();
 window.SUPABASE_SQL_SCHEMA = SUPABASE_SQL_SCHEMA;
 window.SUPABASE_MIGRATION_SQL = SUPABASE_MIGRATION_SQL;
+window.SUPABASE_SALES_MIGRATION_SQL = SUPABASE_SALES_MIGRATION_SQL;

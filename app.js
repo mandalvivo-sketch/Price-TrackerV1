@@ -10,6 +10,7 @@
   // State
   let state = {
     products: [],
+    entryPrices: {},
     brands: [],
     selectedBrand: 'ALL',
     searchQuery: '',
@@ -39,6 +40,15 @@
     fabAddProduct: document.getElementById('fabAddProduct'),
     btnOpenAddModal: document.getElementById('btnOpenAddModal'),
     btnEmptyAdd: document.getElementById('btnEmptyAdd'),
+    offlineNotice: document.getElementById('offlineNotice'),
+    appIcon: document.getElementById('appIcon'),
+    btnCloseMenu: document.getElementById('btnCloseMenu'),
+    sideMenu: document.getElementById('sideMenu'),
+    sideMenuOverlay: document.getElementById('sideMenuOverlay'),
+    btnExportBackup: document.getElementById('btnExportBackup'),
+    btnSyncLocal: document.getElementById('btnSyncLocal'),
+    btnRestoreBackup: document.getElementById('btnRestoreBackup'),
+    backupFileInput: document.getElementById('backupFileInput'),
 
     // Product Modal
     productModalOverlay: document.getElementById('productModalOverlay'),
@@ -259,6 +269,7 @@
     try {
       const products = await window.dbService.fetchProducts(state.searchQuery, state.selectedBrand);
       state.products = products;
+      state.entryPrices = await window.dbService.fetchInitialPrices(products.map(product => product.id));
       renderProducts();
     } catch (err) {
       console.error('Error loading products:', err);
@@ -268,7 +279,13 @@
 
   function renderProducts() {
     const count = state.products.length;
-    el.summaryCount.textContent = `Showing ${count} ${count === 1 ? 'Mobile' : 'Mobiles'}`;
+    const groups = Array.from(state.products.reduce((map, product) => {
+      const key = `${product.brand || ''}::${product.model || ''}`.toLowerCase();
+      if (!map.has(key)) map.set(key, { brand: product.brand, model: product.model, products: [] });
+      map.get(key).products.push(product);
+      return map;
+    }, new Map()).values());
+    el.summaryCount.textContent = `Showing ${groups.length} ${groups.length === 1 ? 'Model' : 'Models'} · ${count} ${count === 1 ? 'Variant' : 'Variants'}`;
 
     if (count === 0) {
       el.productListContainer.innerHTML = '';
@@ -279,97 +296,41 @@
 
     el.emptyState.classList.add('hidden');
 
-    // 1. Render Mobile Compact Card View
-    const cardsHtml = state.products.map(p => {
-      return `
-        <article class="product-card" data-id="${p.id}" id="prodCard-${p.id}">
-          <div class="card-header-row">
-            <div class="card-title-group">
-              <span class="brand-badge">${escapeHtml(p.brand)}</span>
-              <span class="model-name">${escapeHtml(p.model)}</span>
-              ${p.variant ? `<span class="variant-tag">${escapeHtml(p.variant)}</span>` : ''}
-              ${p.color ? `<span class="color-tag">${escapeHtml(p.color)}</span>` : ''}
-            </div>
-            <div class="card-actions-quick">
-              <button class="action-btn history-btn" data-action="history" data-id="${p.id}" title="View Price History">
-                📊 History
-              </button>
-            </div>
-          </div>
+    const entryPrice = (p, field) => {
+      const entry = state.entryPrices[String(p.id)];
+      const current = Number(p[`current_${field}`]);
+      const first = Number(entry?.[field]);
+      if (!entry || !Number.isFinite(first) || first === current) return '';
+      return `<span class="price-entry ${field}">Entry: ${formatCurrency(first)}</span>`;
+    };
 
-          <div class="price-grid">
-            <div class="price-item clickable-price" data-action="quick-edit" data-id="${p.id}" data-field="dp" title="Click to edit DP">
-              <span class="price-label">DP ✏️</span>
-              <span class="price-val dp">${formatCurrency(p.current_dp)}</span>
-            </div>
-            <div class="price-item clickable-price" data-action="quick-edit" data-id="${p.id}" data-field="mop" title="Click to edit MOP">
-              <span class="price-label">MOP ✏️</span>
-              <span class="price-val mop">${formatCurrency(p.current_mop)}</span>
-            </div>
-            <div class="price-item clickable-price" data-action="quick-edit" data-id="${p.id}" data-field="mrp" title="Click to edit MRP">
-              <span class="price-label">MRP ✏️</span>
-              <span class="price-val mrp">${formatCurrency(p.current_mrp)}</span>
-            </div>
-          </div>
+    const variantCard = (p) => `
+      <article class="product-card variant-product-card" data-id="${p.id}" id="prodCard-${p.id}">
+        <div class="card-header-row"><div class="card-title-group">
+          <span class="variant-tag">${escapeHtml(p.variant || 'Standard')}</span>
+          ${p.color ? `<span class="color-tag">${escapeHtml(p.color)}</span>` : ''}
+        </div><button class="action-btn history-btn" data-action="history" data-id="${p.id}">📊 History</button></div>
+        <div class="price-grid">
+          <div class="price-item clickable-price" data-action="quick-edit" data-id="${p.id}" data-field="dp"><span class="price-label">DP</span><span class="price-val dp">${formatCurrency(p.current_dp)}</span>${entryPrice(p, 'dp')}</div>
+          <div class="price-item clickable-price" data-action="quick-edit" data-id="${p.id}" data-field="mop"><span class="price-label">MOP</span><span class="price-val mop">${formatCurrency(p.current_mop)}</span>${entryPrice(p, 'mop')}</div>
+          <div class="price-item clickable-price" data-action="quick-edit" data-id="${p.id}" data-field="mrp"><span class="price-label">MRP</span><span class="price-val mrp">${formatCurrency(p.current_mrp)}</span>${entryPrice(p, 'mrp')}</div>
+        </div>
+        <div class="card-footer-row"><button class="imei-badge-btn" data-action="imei" data-id="${p.id}" title="View IMEIs for this variant"><span>View IMEIs</span><span class="imei-count">${p.imei_count || 0}</span></button>
+          <div class="card-actions"><button class="action-btn" data-action="edit" data-id="${p.id}">✏️ Edit</button><button class="action-btn delete-btn" data-action="delete" data-id="${p.id}">🗑️ Delete</button></div>
+        </div>
+      </article>`;
 
-          <div class="card-footer-row">
-            <button class="imei-badge-btn" data-action="imei" data-id="${p.id}" title="Manage IMEIs">
-              <span>IMEIs</span>
-              <span class="imei-count">${p.imei_count || 0}</span>
-            </button>
-
-            <div class="card-actions">
-              <button class="action-btn" data-action="edit" data-id="${p.id}" title="Edit Product / Update Price">
-                ✏️ Edit
-              </button>
-              <button class="action-btn delete-btn" data-action="delete" data-id="${p.id}" title="Delete Product">
-                🗑️ Delete
-              </button>
-            </div>
-          </div>
-        </article>
-      `;
+    // One dashboard entry per model. Opening it reveals its variants; the
+    // "View IMEIs" action then opens the existing unit-wise IMEI manager.
+    const cardsHtml = groups.map(group => {
+      const imeiCount = group.products.reduce((total, p) => total + Number(p.imei_count || 0), 0);
+      return `<details class="model-drilldown"><summary><span><span class="brand-badge">${escapeHtml(group.brand)}</span> <span class="model-name">${escapeHtml(group.model)}</span></span><span class="model-summary-count">${group.products.length} ${group.products.length === 1 ? 'variant' : 'variants'} · ${imeiCount} IMEIs</span></summary><div class="variant-list">${group.products.map(variantCard).join('')}</div></details>`;
     }).join('');
 
     el.productListContainer.innerHTML = cardsHtml;
 
-    // 2. Render Desktop Table Rows
-    const tableRowsHtml = state.products.map(p => {
-      return `
-        <tr data-id="${p.id}">
-          <td>
-            <div style="display:flex; align-items:center; gap:6px;">
-              <span class="brand-badge">${escapeHtml(p.brand)}</span>
-              <strong style="font-size:15px;">${escapeHtml(p.model)}</strong>
-            </div>
-          </td>
-          <td>${p.variant ? `<span class="variant-tag">${escapeHtml(p.variant)}</span>` : '<span style="color:var(--text-muted);">-</span>'}</td>
-          <td>${p.color ? escapeHtml(p.color) : '<span style="color:var(--text-muted);">-</span>'}</td>
-          <td class="text-right price-cell clickable-price" data-action="quick-edit" data-id="${p.id}" data-field="dp" style="color:var(--dp-color);" title="Click to edit DP">${formatCurrency(p.current_dp)}</td>
-          <td class="text-right price-cell clickable-price" data-action="quick-edit" data-id="${p.id}" data-field="mop" style="color:var(--mop-color);" title="Click to edit MOP">${formatCurrency(p.current_mop)}</td>
-          <td class="text-right price-cell clickable-price" data-action="quick-edit" data-id="${p.id}" data-field="mrp" style="color:var(--mrp-color);" title="Click to edit MRP">${formatCurrency(p.current_mrp)}</td>
-          <td class="text-center">
-            <button class="imei-badge-btn" data-action="imei" data-id="${p.id}">
-              <span>IMEIs</span>
-              <span class="imei-count">${p.imei_count || 0}</span>
-            </button>
-          </td>
-          <td class="text-right">
-            <div style="display:inline-flex; gap:4px;">
-              <button class="action-btn history-btn" data-action="history" data-id="${p.id}">
-                📊 History
-              </button>
-              <button class="action-btn" data-action="edit" data-id="${p.id}">
-                ✏️ Edit
-              </button>
-              <button class="action-btn delete-btn" data-action="delete" data-id="${p.id}">
-                🗑️
-              </button>
-            </div>
-          </td>
-        </tr>
-      `;
-    }).join('');
+    // Desktop uses the same model → variant → IMEI drill-down inside one table cell.
+    const tableRowsHtml = groups.map(group => `<tr><td colspan="8" class="model-drilldown-cell"><details class="model-drilldown"><summary><span><span class="brand-badge">${escapeHtml(group.brand)}</span> <span class="model-name">${escapeHtml(group.model)}</span></span><span class="model-summary-count">${group.products.length} ${group.products.length === 1 ? 'variant' : 'variants'}</span></summary><div class="variant-list">${group.products.map(variantCard).join('')}</div></details></td></tr>`).join('');
 
     el.desktopTableBody.innerHTML = tableRowsHtml;
   }
@@ -467,6 +428,7 @@
   // Product Form Submission (Add / Update Price Logic with Unique IMEI verification)
   async function handleProductFormSubmit(e) {
     e.preventDefault();
+    if (!requireOnlineForWrite()) return;
     const isEdit = Boolean(el.editProductId.value);
     const brand = el.productBrandSelect.value;
     const model = el.productModelInput.value;
@@ -671,6 +633,7 @@
     el.historyTimelineContainer.querySelectorAll('.history-delete-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
+        if (!requireOnlineForWrite()) return;
         const histId = btn.getAttribute('data-history-id');
         if (!histId) return;
 
@@ -862,6 +825,7 @@
       // Attach Delete handlers
       el.imeiItemsList.querySelectorAll('.imei-btn-action.delete').forEach(btn => {
         btn.addEventListener('click', async () => {
+          if (!requireOnlineForWrite()) return;
           const id = btn.getAttribute('data-delete-id');
           const imeiNum = btn.getAttribute('data-imei');
           if (confirm(`Are you sure you want to delete IMEI "${imeiNum}"?`)) {
@@ -911,6 +875,7 @@
 
   async function handleAddOrUpdateImei(e) {
     if (e) e.preventDefault();
+    if (!requireOnlineForWrite()) return;
     const editingId = el.editingImeiId ? el.editingImeiId.value.trim() : '';
     const oldImei = el.editingOldImei ? el.editingOldImei.value.trim() : '';
     const imeiVal = el.imeiInput.value.trim();
@@ -1169,6 +1134,7 @@
 
   async function handleBrandFormSubmit(e) {
     e.preventDefault();
+    if (!requireOnlineForWrite()) return;
     const name = el.newBrandNameInput.value.trim();
     if (!name) return;
 
@@ -1185,6 +1151,7 @@
   }
 
   async function handleDeleteBrand() {
+    if (!requireOnlineForWrite()) return;
     const name = el.deleteBrandSelect.value;
     if (!name) {
       showToast('Select a brand to delete', 'error');
@@ -1220,6 +1187,7 @@
   }
 
   async function handleConfirmDelete() {
+    if (!requireOnlineForWrite()) return;
     if (!state.productToDeleteId) return;
     try {
       await window.dbService.deleteProduct(state.productToDeleteId);
@@ -1264,8 +1232,69 @@
     el.searchInput.focus();
   }
 
+  function requireOnlineForWrite() {
+    if (navigator.onLine) return true;
+    showToast('Please connect to the internet to save or edit data.', 'error');
+    return false;
+  }
+
+  function setMenuOpen(isOpen) {
+    el.sideMenu.classList.toggle('open', isOpen);
+    el.sideMenuOverlay.classList.toggle('open', isOpen);
+    el.appIcon.setAttribute('aria-expanded', String(isOpen));
+  }
+
+  async function exportBackup() {
+    try {
+      const backup = await window.dbService.createBackup();
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `mobile-price-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      showToast('Full backup downloaded', 'success');
+      setMenuOpen(false);
+    } catch (err) { showToast('Backup failed: ' + (err.message || 'Unknown error'), 'error'); }
+  }
+
+  async function syncOnlineData() {
+    if (!navigator.onLine) {
+      showToast('Please connect to the internet before syncing.', 'error');
+      return;
+    }
+    try {
+      await window.dbService.syncOnlineDataToLocal();
+      await loadBrands();
+      await loadProducts();
+      showToast('Online data synced to this device', 'success');
+      setMenuOpen(false);
+    } catch (err) { showToast('Sync failed: ' + (err.message || 'Check your connection'), 'error'); }
+  }
+
+  async function restoreBackupFile(file) {
+    if (!file) return;
+    try {
+      const backup = JSON.parse(await file.text());
+      if (!confirm('Restore this backup? It will replace all current products, brands, IMEIs, and price history.')) return;
+      await window.dbService.restoreBackup(backup);
+      showToast('Database restored successfully', 'success');
+      setMenuOpen(false);
+      await loadBrands();
+      await loadProducts();
+    } catch (err) { showToast('Restore failed: ' + (err.message || 'Invalid backup file'), 'error'); }
+    finally { el.backupFileInput.value = ''; }
+  }
+
   // Bind All Event Listeners
   function bindEvents() {
+    el.appIcon.addEventListener('click', () => setMenuOpen(true));
+    el.btnCloseMenu.addEventListener('click', () => setMenuOpen(false));
+    el.sideMenuOverlay.addEventListener('click', () => setMenuOpen(false));
+    el.btnExportBackup.addEventListener('click', exportBackup);
+    el.btnSyncLocal.addEventListener('click', syncOnlineData);
+    el.btnRestoreBackup.addEventListener('click', () => el.backupFileInput.click());
+    el.backupFileInput.addEventListener('change', () => restoreBackupFile(el.backupFileInput.files[0]));
     // Search
     el.searchInput.addEventListener('input', handleSearchInput);
     el.btnSearchClear.addEventListener('click', handleSearchClear);
@@ -1318,6 +1347,7 @@
     el.btnCloseHistoryFooter.addEventListener('click', closeHistoryModal);
     if (el.btnClearAllHistory) {
       el.btnClearAllHistory.addEventListener('click', async () => {
+        if (!requireOnlineForWrite()) return;
         if (!state.currentHistoryProductId) return;
         if (confirm('Are you sure you want to CLEAR ALL price history records for this product?')) {
           try {
@@ -1392,6 +1422,10 @@
   // App Initialization
   async function init() {
     bindEvents();
+    const updateNetworkNotice = () => el.offlineNotice.classList.toggle('hidden', navigator.onLine);
+    updateNetworkNotice();
+    window.addEventListener('online', updateNetworkNotice);
+    window.addEventListener('offline', updateNetworkNotice);
     try {
       await window.dbService.verifyConnection();
     } catch (err) {

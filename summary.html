@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stock Summary · Mobile Price Tracker</title>
+  <link rel="stylesheet" href="style.css?v=20260829" />
+  <link rel="stylesheet" href="summary.css?v=20260830" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header summary-header">
+      <div class="header-top">
+        <div class="brand-title">
+          <div class="app-icon">₹</div>
+          <div class="title-text"><h1>Stock Summary</h1><div class="status-tag"><span class="status-dot" id="statusDot"></span><span id="statusLabel">Loading...</span></div></div>
+        </div>
+        <div class="header-actions"><a class="btn btn-secondary btn-sm" href="index.html">← Dashboard</a></div>
+      </div>
+    </header>
+
+    <main class="main-content summary-content">
+      <section class="summary-hero">
+        <div><p class="eyebrow">INVENTORY OVERVIEW</p><h2>Stock and value by company</h2><p>Counts use stored IMEIs. Investment uses DP; potential sales value uses MOP.</p></div>
+        <button class="btn btn-secondary btn-sm" id="btnRefreshSummary">↻ Refresh</button>
+      </section>
+      <section class="metric-grid" id="metricGrid" aria-live="polite"></section>
+      <section class="summary-section"><div class="section-heading"><div><p class="eyebrow">BY COMPANY</p><h2>Company-wise stock</h2></div></div><div class="company-grid" id="companyGrid"></div></section>
+      <section class="summary-section"><div class="section-heading"><div><p class="eyebrow">ALL VARIANTS</p><h2>Stock details</h2></div></div><div class="stock-table-wrap"><table class="stock-table"><thead><tr><th>Company / Model</th><th>Variant</th><th class="right">IMEI Stock</th><th class="right">Invested (DP)</th><th class="right">MOP Total</th><th class="right">MRP Total</th></tr></thead><tbody id="stockTableBody"></tbody></table></div></section>
+      <div class="empty-state hidden" id="summaryEmpty"><div class="empty-icon">📦</div><div class="empty-title">No IMEI stock found</div><div class="empty-desc">Add IMEIs to a product to see stock investment and MOP totals here.</div></div>
+    </main>
+  </div>
+  <script src="supabase.js?v=20260829"></script>
+  <script src="summary.js?v=20260830"></script>
+</body>
+</html>
