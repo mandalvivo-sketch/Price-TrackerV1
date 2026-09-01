@@ -8,7 +8,6 @@
     statusDot: document.getElementById('statusDot'),
     statusLabel: document.getElementById('statusLabel'),
     appIcon: document.getElementById('appIcon'),
-    metricGrid: document.getElementById('metricGrid'),
     brandSummaryBody: document.getElementById('brandSummaryBody'),
     refresh: document.getElementById('btnRefresh')
   };
@@ -56,19 +55,6 @@
     });
 
     const sortedBrands = Array.from(byBrand.values()).sort((a, b) => b.landing - a.landing);
-    const totalQty = Math.max(totals.qty, 1);
-
-    els.metricGrid.innerHTML = [
-      ['Items', totals.items, 'blue'],
-      ['Qty', totals.qty, 'purple'],
-      ['Landing Value', formatMoney(totals.landing), 'orange'],
-      ['Per PC Avg', formatMoney(totals.landing / totalQty), 'green']
-    ].map(([label, value, color]) => `
-      <article class="metric-card ${color}">
-        <span>${label}</span>
-        <strong>${value}</strong>
-      </article>
-    `).join('');
 
     els.brandSummaryBody.innerHTML = sortedBrands.map((row) => {
       const perPc = row.qty > 0 ? row.landing / row.qty : 0;

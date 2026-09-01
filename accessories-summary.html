@@ -17,36 +17,6 @@
       padding: 0 14px 30px;
     }
 
-    .summary-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-      margin-bottom: 18px;
-    }
-
-    .metric-card {
-      background: #fff;
-      border: 1px solid var(--border-color);
-      border-radius: 14px;
-      padding: 14px 16px;
-      box-shadow: var(--shadow-sm);
-    }
-
-    .metric-card span {
-      display: block;
-      color: var(--text-muted);
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin-bottom: 8px;
-    }
-
-    .metric-card strong {
-      font-size: clamp(1.1rem, 2vw, 1.6rem);
-      line-height: 1.2;
-      color: var(--text-primary);
-    }
-
     .compact-panel {
       background: #fff;
       border: 1px solid var(--border-color);
@@ -113,17 +83,7 @@
       white-space: nowrap;
     }
 
-    @media (max-width: 760px) {
-      .summary-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-    }
 
-    @media (max-width: 500px) {
-      .summary-grid {
-        grid-template-columns: 1fr;
-      }
-    }
   </style>
 </head>
 <body>
@@ -147,8 +107,6 @@
     </header>
 
     <main class="main-content" style="padding-top:18px;">
-      <section class="summary-grid" id="metricGrid"></section>
-
       <section class="compact-panel">
         <div class="panel-head">
           <h3>By Brand</h3>
