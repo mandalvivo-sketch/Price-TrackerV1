@@ -1,0 +1,109 @@
+(function () {
+  'use strict';
+
+  const money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+  const formatMoney = (value) => money.format(Number(value) || 0);
+
+  const els = {
+    statusDot: document.getElementById('statusDot'),
+    statusLabel: document.getElementById('statusLabel'),
+    appIcon: document.getElementById('appIcon'),
+    metricGrid: document.getElementById('metricGrid'),
+    brandSummaryBody: document.getElementById('brandSummaryBody'),
+    refresh: document.getElementById('btnRefresh')
+  };
+
+  function escapeHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = value || '';
+    return div.innerHTML;
+  }
+
+  function updateStatus() {
+    const live = window.dbService && window.dbService.isLive;
+    els.statusDot.className = `status-dot${live ? ' live' : ''}`;
+    els.statusLabel.textContent = live ? 'Supabase Connected' : 'Local Database';
+  }
+
+  async function loadSummary() {
+    const rows = JSON.parse(localStorage.getItem('mpt_local_accessory_stock') || '[]');
+    const totals = rows.reduce((acc, item) => {
+      const qty = Number(item.qty || 0);
+      const landing = Number(item.landing_price || 0);
+      const selling = Number(item.selling_price || 0);
+      const mrp = Number(item.mrp || 0);
+
+      acc.items += 1;
+      acc.qty += qty;
+      acc.landing += landing;
+      acc.selling += selling;
+      acc.mrp += mrp;
+      return acc;
+    }, { items: 0, qty: 0, landing: 0, selling: 0, mrp: 0 });
+
+    const byBrand = new Map();
+    rows.forEach((item) => {
+      const brand = item.brand || 'Unknown';
+      if (!byBrand.has(brand)) {
+        byBrand.set(brand, { brand, items: 0, qty: 0, landing: 0, selling: 0, mrp: 0 });
+      }
+      const row = byBrand.get(brand);
+      row.items += 1;
+      row.qty += Number(item.qty || 0);
+      row.landing += Number(item.landing_price || 0);
+      row.selling += Number(item.selling_price || 0);
+      row.mrp += Number(item.mrp || 0);
+    });
+
+    els.metricGrid.innerHTML = [
+      ['Items', totals.items, 'blue'],
+      ['Qty', totals.qty, 'purple'],
+      ['Landing Value', formatMoney(totals.landing), 'orange'],
+      ['Selling Value', formatMoney(totals.selling), 'green']
+    ].map(([label, value, color]) => `
+      <article class="metric-card ${color}">
+        <span>${label}</span>
+        <strong>${value}</strong>
+      </article>
+    `).join('');
+
+    const sortedBrands = Array.from(byBrand.values()).sort((a, b) => b.landing - a.landing);
+
+    els.brandSummaryBody.innerHTML = sortedBrands.map((row) => `
+      <tr>
+        <td><span class="tiny-badge">${escapeHtml(row.brand)}</span></td>
+        <td>${row.items}</td>
+        <td>${row.qty}</td>
+        <td class="money">${formatMoney(row.landing)}</td>
+        <td class="money">${formatMoney(row.selling)}</td>
+        <td class="money">${formatMoney(row.mrp)}</td>
+      </tr>
+    `).join('');
+  }
+
+  async function refreshData() {
+    try {
+      if (window.dbService) {
+        const [brands, types, stock] = await Promise.all([
+          window.dbService.fetchAccessoryBrands(),
+          window.dbService.fetchAccessoryTypes(),
+          window.dbService.fetchAccessoryStock()
+        ]);
+        localStorage.setItem('mpt_local_accessory_brands', JSON.stringify(brands || []));
+        localStorage.setItem('mpt_local_accessory_types', JSON.stringify(types || []));
+        localStorage.setItem('mpt_local_accessory_stock', JSON.stringify(stock || []));
+      }
+      await loadSummary();
+    } catch (error) {
+      console.error('Accessory summary failed:', error);
+      els.brandSummaryBody.innerHTML = `<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--text-muted);">Unable to load accessory summary.</td></tr>`;
+    }
+  }
+
+  els.appIcon.addEventListener('click', () => {
+    window.location.href = 'index.html';
+  });
+  els.refresh.addEventListener('click', refreshData);
+  updateStatus();
+  refreshData();
+}());

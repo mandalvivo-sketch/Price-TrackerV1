@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5" />
+  <title>Sales Report · Mobile Price Tracker</title>
+  <link rel="stylesheet" href="style.css?v=20260831" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    /* ----- flat, colorful, deep contrast gradient design ----- */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-deep: #0e1629;
+      --bg-card: #1b263b;
+      --bg-card-alt: #26344b;
+      --bg-input: #2b3b55;
+      --text-light: #f0f4ff;
+      --text-muted: #a1b5d9;
+      --text-soft: #c6d6f0;
+      --primary-glow: #6c8cff;
+      --gradient-main: linear-gradient(145deg, #1a2a4a, #0e1a2f);
+      --gradient-card: linear-gradient(145deg, #1f3150, #14243e);
+      --gradient-accent: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      --gradient-success: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      --gradient-warm: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+      --shadow-deep: 0 12px 28px rgba(0, 0, 0, 0.7);
+      --radius-card: 24px;
+      --radius-sm: 14px;
+      --border-glow: rgba(108, 140, 255, 0.25);
+    }
+
+    body {
+      background: var(--bg-deep);
+      background-image: radial-gradient(circle at 20% 30%, #1f3355 0%, #0b1426 90%);
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      color: var(--text-light);
+      line-height: 1.5;
+      padding: 0 0 40px 0;
+      min-height: 100vh;
+    }
+
+    .app-container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 14px;
+    }
+
+    /* ----- header with deep contrast ----- */
+    .app-header {
+      background: var(--gradient-card);
+      backdrop-filter: blur(4px);
+      border-radius: 0 0 var(--radius-card) var(--radius-card);
+      padding: 18px 24px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-deep), inset 0 1px 2px rgba(255, 255, 255, 0.06);
+      border-bottom: 1px solid var(--border-glow);
+    }
+
+    .header-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px 8px;
+    }
+
+    .brand-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .app-icon {
+      background: var(--gradient-accent);
+      color: white;
+      width: 44px;
+      height: 44px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: 700;
+      box-shadow: 0 6px 14px rgba(245, 87, 108, 0.4);
+    }
+
+    .title-text h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #f0f4ff 0%, #b7cdff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.2;
+    }
+
+    .status-tag {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.7rem;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 4px 16px 4px 12px;
+      border-radius: 40px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-soft);
+      width: fit-content;
+      backdrop-filter: blur(4px);
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      background: #4f6f9f;
+      box-shadow: 0 0 8px #4f6f9f;
+    }
+
+    .status-dot.online {
+      background: #4fe3a1;
+      box-shadow: 0 0 12px #4fe3a1;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* ----- buttons with gradient ----- */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 22px;
+      border: none;
+      border-radius: 40px;
+      font-weight: 600;
+      font-size: 0.8rem;
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--text-light);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-primary {
+      background: var(--gradient-accent);
+      color: white;
+      border: none;
+      box-shadow: 0 6px 16px rgba(245, 87, 108, 0.3);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-light);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .btn-sm {
+      padding: 6px 16px;
+      font-size: 0.7rem;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #f5a3ff 0%, #f5576c 100%);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.14);
+    }
+
+    /* ----- main content sections ----- */
+    .sales-report-content {
+      padding: 0 0 20px 0;
+    }
+
+    .report-hero {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px 12px;
+      background: var(--gradient-card);
+      padding: 22px 26px;
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-deep);
+      margin-bottom: 28px;
+      border: 1px solid var(--border-glow);
+      backdrop-filter: blur(4px);
+    }
+
+    .report-hero h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: white;
+      margin-top: 4px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .eyebrow {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .report-search {
+      width: min(320px, 100%);
+      position: relative;
+    }
+
+    .report-search input {
+      width: 100%;
+      padding: 12px 48px 12px 20px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 40px;
+      background: var(--bg-input);
+      font-size: 0.9rem;
+      color: white;
+      transition: 0.2s;
+      outline: none;
+      box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .report-search input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .report-search input:focus {
+      border-color: var(--primary-glow);
+      background: #1f3155;
+      box-shadow: 0 0 0 4px rgba(108, 140, 255, 0.15), inset 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .report-search .search-icon {
+      position: absolute;
+      right: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+      opacity: 0.6;
+      font-size: 1rem;
+      pointer-events: none;
+      color: var(--text-muted);
+    }
+
+    /* metric grid - colorful cards */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 14px;
+      margin-bottom: 32px;
+    }
+
+    .metric-card {
+      background: var(--gradient-card);
+      border-radius: var(--radius-sm);
+      padding: 18px 16px;
+      border: 1px solid var(--border-glow);
+      box-shadow: var(--shadow-deep);
+      transition: 0.2s;
+      backdrop-filter: blur(4px);
+    }
+
+    .metric-card:nth-child(1) { border-left: 4px solid #f093fb; }
+    .metric-card:nth-child(2) { border-left: 4px solid #4facfe; }
+    .metric-card:nth-child(3) { border-left: 4px solid #f6d365; }
+    .metric-card:nth-child(4) { border-left: 4px solid #43e97b; }
+
+    .metric-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .metric-value {
+      font-size: 1.6rem;
+      font-weight: 800;
+      margin-top: 4px;
+      color: white;
+      text-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .metric-value.money-positive {
+      background: var(--gradient-success);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .metric-value.money-neutral {
+      color: white;
+    }
+
+    /* section heading */
+    .section-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 28px 0 16px 0;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+    }
+
+    .section-heading h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: white;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    /* table wrapper */
+    .sales-list-wrap {
+      background: var(--gradient-card);
+      border-radius: var(--radius-card);
+      border: 1px solid var(--border-glow);
+      overflow-x: auto;
+      padding: 4px 4px 4px 4px;
+      box-shadow: var(--shadow-deep);
+      backdrop-filter: blur(4px);
+    }
+
+    .sales-report-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      min-width: 920px;
+    }
+
+    .sales-report-table th {
+      text-align: left;
+      padding: 16px 12px 12px 14px;
+      font-weight: 600;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .sales-report-table td {
+      padding: 14px 12px 14px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      vertical-align: middle;
+      color: var(--text-soft);
+    }
+
+    .sales-report-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .sales-report-table tbody tr:hover {
+      background: rgba(108, 140, 255, 0.08);
+      backdrop-filter: blur(4px);
+    }
+
+    .report-product {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .report-brand {
+      display: inline-block;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+      font-size: 0.6rem;
+      font-weight: 700;
+      padding: 3px 12px;
+      border-radius: 30px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      width: fit-content;
+      box-shadow: 0 2px 8px rgba(245, 87, 108, 0.3);
+    }
+
+    .report-imei {
+      font-family: 'SF Mono', ui-monospace, monospace;
+      font-size: 0.7rem;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 2px 12px;
+      border-radius: 20px;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+      display: inline-block;
+      margin-top: 2px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .money-positive {
+      background: var(--gradient-success);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-weight: 700;
+    }
+
+    .money-neutral {
+      font-weight: 600;
+      color: white;
+    }
+
+    .badge-remark {
+      background: rgba(255, 255, 255, 0.04);
+      padding: 2px 12px;
+      border-radius: 30px;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      display: inline-block;
+      max-width: 100px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .empty-box {
+      padding: 44px 20px;
+      text-align: center;
+      background: var(--gradient-card);
+      border-radius: var(--radius-sm);
+      border: 1px dashed var(--border-glow);
+      color: var(--text-muted);
+      margin-top: 16px;
+      backdrop-filter: blur(4px);
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    /* action buttons inside table */
+    .action-cell {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .btn-icon {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 30px;
+      padding: 4px 12px;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      cursor: default;
+      transition: 0.1s;
+    }
+
+    .btn-icon:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: white;
+    }
+
+    /* mobile touch */
+    @media (max-width: 680px) {
+      .app-header {
+        padding: 14px 16px;
+      }
+
+      .title-text h1 {
+        font-size: 1.1rem;
+      }
+
+      .report-hero {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 18px 16px;
+      }
+
+      .report-search {
+        width: 100%;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .sales-report-table th,
+      .sales-report-table td {
+        padding: 10px 8px;
+        font-size: 0.75rem;
+      }
+
+      .sales-report-table {
+        min-width: 760px;
+      }
+
+      .btn-sm {
+        font-size: 0.7rem;
+        padding: 5px 12px;
+      }
+
+      .header-actions .btn {
+        font-size: 0.7rem;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .metric-value {
+        font-size: 1.2rem;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="app-container">
+  <header class="app-header summary-header">
+    <div class="header-top">
+      <div class="brand-title">
+        <div class="app-icon">₹</div>
+        <div class="title-text">
+          <h1>Sales Report Details</h1>
+          <div class="status-tag">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusLabel">Loading...</span>
+          </div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary btn-sm" id="btnRefreshSalesReport">↻ Refresh</button>
+        <a class="btn btn-secondary btn-sm" href="index.html">← Dashboard</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content sales-report-content">
+    <section class="report-hero summary-section">
+      <div>
+        <p class="eyebrow">SALES OVERVIEW</p>
+        <h2>Sold IMEI records and sale values</h2>
+      </div>
+      <div class="report-search">
+        <input type="text" class="form-input" id="salesReportSearch" placeholder="Search brand, model, IMEI..." autocomplete="off" />
+        <span class="search-icon">🔍</span>
+      </div>
+    </section>
+
+    <section class="metric-grid" id="salesMetricGrid"></section>
+
+    <section class="summary-section">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">DETAIL REPORT</p>
+          <h2>Sale transactions</h2>
+        </div>
+      </div>
+
+      <div class="sales-list-wrap">
+        <table class="sales-report-table">
+          <thead>
+          <tr>
+            <th>Date</th>
+            <th>Brand</th>
+            <th>Model</th>
+            <th>Variant</th>
+            <th>IMEI</th>
+            <th>Entry DP</th>
+            <th>Sold MOP</th>
+            <th>MRP</th>
+            <th>Remarks</th>
+            <th>Action</th>
+          </tr>
+          </thead>
+          <tbody id="salesReportBody"></tbody>
+        </table>
+      </div>
+
+      <div id="salesEmptyState" class="empty-box hidden">
+        No sold IMEI records found. Mark a device as sold from the sold page to see it here.
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="supabase.js?v=20260832"></script>
+<script src="sales-report.js?v=20260832"></script>
+</body>
+</html>

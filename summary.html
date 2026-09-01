@@ -7,12 +7,6 @@
   <link rel="stylesheet" href="style.css?v=20260829" />
   <link rel="stylesheet" href="summary.css?v=20260830" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#111111" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
 </head>
 <body>
   <div class="app-container">
@@ -39,14 +33,5 @@
   </div>
   <script src="supabase.js?v=20260829"></script>
   <script src="summary.js?v=20260830"></script>
-<script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./service-worker.js').catch(err =>
-          console.warn('PWA service worker registration failed:', err)
-        );
-      });
-    }
-  </script>
 </body>
 </html>

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Accessories Summary · Mobile Price Tracker</title>
+  <link rel="stylesheet" href="style.css?v=20260831" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      background: #f8fafc;
+    }
+
+    .compact-page {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 14px 30px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .metric-card {
+      background: #fff;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 14px 16px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .metric-card span {
+      display: block;
+      color: var(--text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+
+    .metric-card strong {
+      font-size: clamp(1.1rem, 2vw, 1.6rem);
+      line-height: 1.2;
+      color: var(--text-primary);
+    }
+
+    .compact-panel {
+      background: #fff;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .panel-head h3 {
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .mini-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .mini-table th,
+    .mini-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-color);
+      text-align: left;
+      font-size: 13px;
+      vertical-align: middle;
+    }
+
+    .mini-table th {
+      background: #f8fafc;
+      color: var(--text-secondary);
+      font-size: 11px;
+      uppercase: true;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .mini-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .tiny-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #2563eb;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .money {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 760px) {
+      .summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 500px) {
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container compact-page">
+    <header class="app-header">
+      <div class="header-top">
+        <div class="brand-title">
+          <button class="app-icon app-menu-trigger" id="appIcon" aria-label="Back to dashboard">₹</button>
+          <div class="title-text">
+            <h1>Accessories Summary</h1>
+            <div class="status-tag">
+              <span class="status-dot" id="statusDot"></span>
+              <span id="statusLabel">Loading...</span>
+            </div>
+          </div>
+        </div>
+        <div class="header-actions">
+          <a class="btn btn-secondary btn-sm" href="index.html">← Dashboard</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content" style="padding-top:18px;">
+      <section class="summary-grid" id="metricGrid"></section>
+
+      <section class="compact-panel">
+        <div class="panel-head">
+          <h3>By Brand</h3>
+          <button class="btn btn-secondary btn-sm" id="btnRefresh">↻ Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table class="mini-table">
+            <thead>
+              <tr>
+                <th>Brand</th>
+                <th>Items</th>
+                <th>Qty</th>
+                <th>Landing</th>
+                <th>Selling</th>
+                <th>MRP</th>
+              </tr>
+            </thead>
+            <tbody id="brandSummaryBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="supabase.js?v=20260832"></script>
+  <script src="accessories-summary.js?v=20260832"></script>
+</body>
+</html>

@@ -32,6 +32,8 @@
     statusLabel: document.getElementById('statusLabel'),
     searchInput: document.getElementById('searchInput'),
     btnSearchClear: document.getElementById('btnSearchClear'),
+    btnSearchScan: document.getElementById('btnSearchScan'),
+    searchScanResult: document.getElementById('searchScanResult'),
     brandPillsContainer: document.getElementById('brandPillsContainer'),
     summaryCount: document.getElementById('summaryCount'),
     productListContainer: document.getElementById('productListContainer'),
@@ -49,6 +51,7 @@
     btnSyncLocal: document.getElementById('btnSyncLocal'),
     btnRestoreBackup: document.getElementById('btnRestoreBackup'),
     backupFileInput: document.getElementById('backupFileInput'),
+    btnOpenBrandModal: document.getElementById('btnOpenBrandModal'),
 
     // Product Modal
     productModalOverlay: document.getElementById('productModalOverlay'),
@@ -114,6 +117,9 @@
     brandForm: document.getElementById('brandForm'),
     newBrandNameInput: document.getElementById('newBrandNameInput'),
     deleteBrandSelect: document.getElementById('deleteBrandSelect'),
+    brandColorPicker: document.getElementById('brandColorPicker'),
+    btnUpdateBrandColor: document.getElementById('btnUpdateBrandColor'),
+    deleteBrandSelectSecondary: document.getElementById('deleteBrandSelectSecondary'),
     btnDeleteBrand: document.getElementById('btnDeleteBrand'),
     btnCloseBrandModal: document.getElementById('btnCloseBrandModal'),
     btnCancelBrand: document.getElementById('btnCancelBrand'),
@@ -209,12 +215,19 @@
     }
   }
 
+  function getBrandBadgeStyle(brandName) {
+    const brand = state.brands.find(item => String(item.name || '').toLowerCase() === String(brandName || '').toLowerCase());
+    const color = brand && brand.color ? brand.color : '#2563eb';
+    return `background:${color}; color:#ffffff; border:1px solid ${color};`;
+  }
+
   function renderBrandPills() {
     // Keep 'All' pill, append distinct brand pills
     const allPill = `<button class="brand-pill ${state.selectedBrand === 'ALL' ? 'active' : ''}" data-brand="ALL" id="pillBrandAll">All Brands</button>`;
     const pillsHtml = state.brands.map(b => {
       const active = state.selectedBrand === b.name ? 'active' : '';
-      return `<button class="brand-pill ${active}" data-brand="${escapeHtml(b.name)}" draggable="true" title="Drag to reorder">${escapeHtml(b.name)}</button>`;
+      const style = `style="${getBrandBadgeStyle(b.name)}"`;
+      return `<button class="brand-pill ${active}" data-brand="${escapeHtml(b.name)}" draggable="true" title="Drag to reorder" ${style}>${escapeHtml(b.name)}</button>`;
     }).join('');
 
     el.brandPillsContainer.innerHTML = allPill + pillsHtml;
@@ -324,13 +337,17 @@
     // "View IMEIs" action then opens the existing unit-wise IMEI manager.
     const cardsHtml = groups.map(group => {
       const imeiCount = group.products.reduce((total, p) => total + Number(p.imei_count || 0), 0);
-      return `<details class="model-drilldown"><summary><span><span class="brand-badge">${escapeHtml(group.brand)}</span> <span class="model-name">${escapeHtml(group.model)}</span></span><span class="model-summary-count">${group.products.length} ${group.products.length === 1 ? 'variant' : 'variants'} · ${imeiCount} IMEIs</span></summary><div class="variant-list">${group.products.map(variantCard).join('')}</div></details>`;
+      const badgeStyle = getBrandBadgeStyle(group.brand);
+      return `<details class="model-drilldown"><summary><span><span class="brand-badge" style="${badgeStyle}">${escapeHtml(group.brand)}</span> <span class="model-name">${escapeHtml(group.model)}</span></span><span class="model-summary-count">${group.products.length} ${group.products.length === 1 ? 'variant' : 'variants'} · ${imeiCount} IMEIs</span></summary><div class="variant-list">${group.products.map(variantCard).join('')}</div></details>`;
     }).join('');
 
     el.productListContainer.innerHTML = cardsHtml;
 
     // Desktop uses the same model → variant → IMEI drill-down inside one table cell.
-    const tableRowsHtml = groups.map(group => `<tr><td colspan="8" class="model-drilldown-cell"><details class="model-drilldown"><summary><span><span class="brand-badge">${escapeHtml(group.brand)}</span> <span class="model-name">${escapeHtml(group.model)}</span></span><span class="model-summary-count">${group.products.length} ${group.products.length === 1 ? 'variant' : 'variants'}</span></summary><div class="variant-list">${group.products.map(variantCard).join('')}</div></details></td></tr>`).join('');
+    const tableRowsHtml = groups.map(group => {
+      const badgeStyle = getBrandBadgeStyle(group.brand);
+      return `<tr><td colspan="8" class="model-drilldown-cell"><details class="model-drilldown"><summary><span><span class="brand-badge" style="${badgeStyle}">${escapeHtml(group.brand)}</span> <span class="model-name">${escapeHtml(group.model)}</span></span><span class="model-summary-count">${group.products.length} ${group.products.length === 1 ? 'variant' : 'variants'}</span></summary><div class="variant-list">${group.products.map(variantCard).join('')}</div></details></td></tr>`;
+    }).join('');
 
     el.desktopTableBody.innerHTML = tableRowsHtml;
   }
@@ -939,11 +956,18 @@
       return;
     }
 
-    // Browsers only expose the camera on HTTPS sites (localhost is also
-    // allowed for development). This avoids an unhelpful camera error on a
-    // website served over plain HTTP.
-    if (!window.isSecureContext) {
-      showToast('Camera scanning requires HTTPS. Open this website using HTTPS and try again.', 'error');
+    const isLocalhost = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+    const hasMediaSupport = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+
+    // Browsers only expose the camera on secure origins. localhost is also
+    // allowed for development, but direct file:// pages are blocked.
+    if (!window.isSecureContext && !isLocalhost) {
+      showToast('Camera scanning requires HTTPS or localhost. Open this app through Live Server/localhost and allow camera access.', 'error');
+      return;
+    }
+
+    if (!hasMediaSupport) {
+      showToast('This browser does not support camera access. Try Chrome or Edge on mobile.', 'error');
       return;
     }
 
@@ -977,10 +1001,23 @@
   }
 
   function getCameraErrorMessage(err) {
-    // html5-qrcode may reject with a plain string instead of an Error object.
-    if (err && typeof err.message === 'string' && err.message.trim()) return err.message;
+    const errorName = err && typeof err.name === 'string' ? err.name : '';
+    const errorMessage = err && typeof err.message === 'string' && err.message.trim() ? err.message : '';
+
+    if (errorName === 'NotAllowedError' || errorName === 'PermissionDeniedError') {
+      return 'Camera permission was blocked. Please tap Allow when the browser asks, then retry.';
+    }
+
+    if (errorName === 'NotFoundError') {
+      return 'No camera was detected on this device.';
+    }
+
+    if (errorName === 'SecurityError') {
+      return 'The page is not running in a secure context. Use localhost/HTTPS and allow camera access.';
+    }
+
+    if (errorMessage) return errorMessage;
     if (typeof err === 'string' && err.trim()) return err;
-    if (err && typeof err.name === 'string' && err.name) return err.name;
     return 'Unable to start the camera. Please allow camera access and try again.';
   }
 
@@ -1077,6 +1114,13 @@
           console.warn(e);
         }
       }
+    } else if (state.scannerTarget === 'search') {
+      el.searchInput.value = cleaned;
+      state.searchQuery = cleaned;
+      el.btnSearchClear.classList.add('visible');
+      showSearchScanResult(cleaned);
+      showToast(`Scanned: ${cleaned}`, 'success');
+      await loadProducts();
     } else {
       // Default: IMEI modal
       el.imeiInput.value = cleaned;
@@ -1126,6 +1170,17 @@
   function renderDeleteBrandOptions() {
     const options = state.brands.map(brand => `<option value="${escapeHtml(brand.name)}">${escapeHtml(brand.name)}</option>`).join('');
     el.deleteBrandSelect.innerHTML = '<option value="">-- Select Brand --</option>' + options;
+    el.deleteBrandSelectSecondary.innerHTML = '<option value="">-- Select Brand --</option>' + options;
+    const selectedBrand = el.deleteBrandSelect.value || el.deleteBrandSelectSecondary.value || '';
+    if (selectedBrand) {
+      const found = state.brands.find(brand => String(brand.name).toLowerCase() === String(selectedBrand).toLowerCase());
+      if (found && found.color) {
+        el.brandColorPicker.value = found.color;
+      }
+    } else if (state.brands.length) {
+      const first = state.brands[0];
+      el.brandColorPicker.value = first.color || '#2563eb';
+    }
   }
 
   function closeBrandModal() {
@@ -1136,10 +1191,11 @@
     e.preventDefault();
     if (!requireOnlineForWrite()) return;
     const name = el.newBrandNameInput.value.trim();
+    const color = (document.getElementById('newBrandColorInput') || {}).value || '#2563eb';
     if (!name) return;
 
     try {
-      const created = await window.dbService.addBrand(name);
+      const created = await window.dbService.addBrand(name, color);
       showToast(`Brand "${created.name}" added!`, 'success');
       closeBrandModal();
       await loadBrands();
@@ -1150,9 +1206,30 @@
     }
   }
 
+  async function handleUpdateBrandColor() {
+    if (!requireOnlineForWrite()) return;
+    const name = el.deleteBrandSelect.value || el.deleteBrandSelectSecondary.value;
+    if (!name) {
+      showToast('Select a brand to edit', 'error');
+      return;
+    }
+
+    const color = el.brandColorPicker.value;
+    if (!confirm(`Update the color for brand "${name}"?`)) return;
+
+    try {
+      await window.dbService.updateBrandColor(name, color);
+      showToast(`Brand "${name}" color updated`, 'success');
+      await loadBrands();
+      renderDeleteBrandOptions();
+    } catch (err) {
+      showToast(err.message || 'Failed to update brand color', 'error');
+    }
+  }
+
   async function handleDeleteBrand() {
     if (!requireOnlineForWrite()) return;
-    const name = el.deleteBrandSelect.value;
+    const name = el.deleteBrandSelectSecondary.value || el.deleteBrandSelect.value;
     if (!name) {
       showToast('Select a brand to delete', 'error');
       return;
@@ -1217,6 +1294,10 @@
     const val = e.target.value;
     state.searchQuery = val;
     el.btnSearchClear.classList.toggle('visible', Boolean(val));
+    if (!val.trim()) {
+      el.searchScanResult.classList.add('hidden');
+      el.searchScanResult.innerHTML = '';
+    }
 
     clearTimeout(searchDebounceTimer);
     searchDebounceTimer = setTimeout(() => {
@@ -1228,8 +1309,22 @@
     el.searchInput.value = '';
     state.searchQuery = '';
     el.btnSearchClear.classList.remove('visible');
+    el.searchScanResult.classList.add('hidden');
+    el.searchScanResult.innerHTML = '';
     loadProducts();
     el.searchInput.focus();
+  }
+
+  function showSearchScanResult(code) {
+    const cleaned = String(code || '').trim();
+    if (!cleaned) {
+      el.searchScanResult.classList.add('hidden');
+      el.searchScanResult.innerHTML = '';
+      return;
+    }
+
+    el.searchScanResult.innerHTML = `<span class="search-scan-label">Scanned:</span> <span class="search-scan-value">${escapeHtml(cleaned)}</span>`;
+    el.searchScanResult.classList.remove('hidden');
   }
 
   function requireOnlineForWrite() {
@@ -1291,6 +1386,10 @@
     el.appIcon.addEventListener('click', () => setMenuOpen(true));
     el.btnCloseMenu.addEventListener('click', () => setMenuOpen(false));
     el.sideMenuOverlay.addEventListener('click', () => setMenuOpen(false));
+    el.btnOpenBrandModal.addEventListener('click', () => {
+      openBrandModal();
+      setMenuOpen(false);
+    });
     el.btnExportBackup.addEventListener('click', exportBackup);
     el.btnSyncLocal.addEventListener('click', syncOnlineData);
     el.btnRestoreBackup.addEventListener('click', () => el.backupFileInput.click());
@@ -1298,6 +1397,9 @@
     // Search
     el.searchInput.addEventListener('input', handleSearchInput);
     el.btnSearchClear.addEventListener('click', handleSearchClear);
+    if (el.btnSearchScan) {
+      el.btnSearchScan.addEventListener('click', () => launchCameraScanner('search'));
+    }
 
     // Add Product Modal Triggers
     el.btnOpenAddModal.addEventListener('click', openAddProductModal);
@@ -1384,7 +1486,18 @@
     el.btnCloseBrandModal.addEventListener('click', closeBrandModal);
     el.btnCancelBrand.addEventListener('click', closeBrandModal);
     el.brandForm.addEventListener('submit', handleBrandFormSubmit);
+    el.btnUpdateBrandColor.addEventListener('click', handleUpdateBrandColor);
     el.btnDeleteBrand.addEventListener('click', handleDeleteBrand);
+    el.deleteBrandSelect.addEventListener('change', () => {
+      const brand = state.brands.find(item => String(item.name).toLowerCase() === String(el.deleteBrandSelect.value || '').toLowerCase());
+      if (brand && brand.color) el.brandColorPicker.value = brand.color;
+      el.deleteBrandSelectSecondary.value = el.deleteBrandSelect.value;
+    });
+    el.deleteBrandSelectSecondary.addEventListener('change', () => {
+      const brand = state.brands.find(item => String(item.name).toLowerCase() === String(el.deleteBrandSelectSecondary.value || '').toLowerCase());
+      if (brand && brand.color) el.brandColorPicker.value = brand.color;
+      el.deleteBrandSelect.value = el.deleteBrandSelectSecondary.value;
+    });
 
     // Delete Modal Triggers
     el.btnCloseDeleteModal.addEventListener('click', closeDeleteModal);

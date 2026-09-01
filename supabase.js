@@ -16,11 +16,30 @@ const STORAGE_KEYS = {
   PRODUCTS: 'mpt_local_products',
   PRICE_HISTORY: 'mpt_local_price_history',
   IMEIS: 'mpt_local_imeis',
+  SOLD_IMEIS: 'mpt_local_sold_imeis',
+  SALES: 'mpt_local_sales',
   BRANDS: 'mpt_local_brands',
-  BRAND_ORDER: 'mpt_brand_order'
+  BRAND_ORDER: 'mpt_brand_order',
+  ACCESSORY_BRANDS: 'mpt_local_accessory_brands',
+  ACCESSORY_TYPES: 'mpt_local_accessory_types',
+  ACCESSORY_STOCK: 'mpt_local_accessory_stock'
 };
 
 // Initial default brands for quick start
+const BRAND_COLOR_MAP = {
+  apple: '#8b5cf6',
+  samsung: '#1d4ed8',
+  vivo: '#2563eb',
+  oppo: '#f97316',
+  oneplus: '#0f766e',
+  realme: '#ec4899',
+  xiaomi: '#ef4444',
+  iqoo: '#14b8a6',
+  motorola: '#f59e0b',
+  nothing: '#111827',
+  'google pixel': '#10b981'
+};
+
 const INITIAL_BRANDS = [
   'Apple',
   'Samsung',
@@ -29,10 +48,7 @@ const INITIAL_BRANDS = [
   'OnePlus',
   'realme',
   'Xiaomi',
-  'iQOO',
-  'Motorola',
-  'Nothing',
-  'Google Pixel'
+  'iQOO'
 ];
 
 // Initial sample products for instant preview/demo
@@ -257,12 +273,38 @@ class SupabaseService {
   }
 
   seedLocalStorage() {
+    if (!localStorage.getItem(STORAGE_KEYS.SOLD_IMEIS)) {
+      localStorage.setItem(STORAGE_KEYS.SOLD_IMEIS, JSON.stringify([]));
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.SALES)) {
+      localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify([]));
+    }
     if (!localStorage.getItem(STORAGE_KEYS.BRANDS)) {
       localStorage.setItem(STORAGE_KEYS.BRANDS, JSON.stringify(INITIAL_BRANDS.map(name => ({
         id: 'brand-' + Math.random().toString(36).substr(2, 9),
         name,
+        color: BRAND_COLOR_MAP[String(name).trim().toLowerCase()] || '#2563eb',
         created_at: new Date().toISOString()
       }))));
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.ACCESSORY_BRANDS)) {
+      localStorage.setItem(STORAGE_KEYS.ACCESSORY_BRANDS, JSON.stringify([
+        { id: 'acc-brand-1', name: 'vivo', created_at: new Date().toISOString() },
+        { id: 'acc-brand-2', name: 'Samsung', created_at: new Date().toISOString() },
+        { id: 'acc-brand-3', name: 'Anker', created_at: new Date().toISOString() },
+        { id: 'acc-brand-4', name: 'Realme', created_at: new Date().toISOString() }
+      ]));
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.ACCESSORY_TYPES)) {
+      localStorage.setItem(STORAGE_KEYS.ACCESSORY_TYPES, JSON.stringify([
+        { id: 'acc-type-1', name: 'Headphone', created_at: new Date().toISOString() },
+        { id: 'acc-type-2', name: 'USB-C Cable', created_at: new Date().toISOString() },
+        { id: 'acc-type-3', name: 'Power Bank', created_at: new Date().toISOString() },
+        { id: 'acc-type-4', name: 'Charger', created_at: new Date().toISOString() }
+      ]));
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.ACCESSORY_STOCK)) {
+      localStorage.setItem(STORAGE_KEYS.ACCESSORY_STOCK, JSON.stringify([]));
     }
     if (!localStorage.getItem(STORAGE_KEYS.PRODUCTS)) {
       localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
@@ -354,15 +396,17 @@ class SupabaseService {
     localStorage.setItem(STORAGE_KEYS.BRAND_ORDER, JSON.stringify(order));
   }
 
-  async addBrand(name) {
-    const trimmed = name.trim();
+  async addBrand(name, color = '') {
+    const trimmed = (name || '').trim();
     if (!trimmed) throw new Error('Brand name cannot be empty');
+
+    const resolvedColor = (color || '').trim() || BRAND_COLOR_MAP[trimmed.toLowerCase()] || '#2563eb';
 
     if (this.isLive && this.client) {
       try {
         const { data, error } = await this.client
           .from('brands')
-          .insert([{ name: trimmed }])
+          .insert([{ name: trimmed, color: resolvedColor }])
           .select()
           .single();
         if (error) {
@@ -378,18 +422,44 @@ class SupabaseService {
 
     // Local fallback
     const brands = JSON.parse(localStorage.getItem(STORAGE_KEYS.BRANDS) || '[]');
-    if (brands.some(b => b.name.toLowerCase() === trimmed.toLowerCase())) {
+    if (brands.some(b => String(b.name || '').toLowerCase() === trimmed.toLowerCase())) {
       throw new Error(`Brand "${trimmed}" already exists`);
     }
     const newBrand = {
       id: 'brand-' + Math.random().toString(36).substr(2, 9),
       name: trimmed,
+      color: resolvedColor,
       created_at: new Date().toISOString()
     };
     brands.push(newBrand);
     localStorage.setItem(STORAGE_KEYS.BRANDS, JSON.stringify(brands));
     this.saveBrandOrder(brands);
     return newBrand;
+  }
+
+  async updateBrandColor(name, color) {
+    const trimmed = (name || '').trim();
+    if (!trimmed) throw new Error('Brand name is required');
+
+    const resolvedColor = (color || '').trim() || '#2563eb';
+
+    if (this.isLive && this.client) {
+      const { error } = await this.client
+        .from('brands')
+        .update({ color: resolvedColor })
+        .eq('name', trimmed);
+      if (error) throw new Error(`Could not update brand color: ${error.message}`);
+    }
+
+    const brands = JSON.parse(localStorage.getItem(STORAGE_KEYS.BRANDS) || '[]');
+    const updated = brands.map(brand => {
+      if (String(brand.name || '').toLowerCase() === trimmed.toLowerCase()) {
+        return { ...brand, color: resolvedColor };
+      }
+      return brand;
+    });
+    localStorage.setItem(STORAGE_KEYS.BRANDS, JSON.stringify(updated));
+    return true;
   }
 
   async deleteBrand(name) {
@@ -425,6 +495,600 @@ class SupabaseService {
       JSON.stringify(brands.filter(brand => brand.name.toLowerCase() !== trimmed.toLowerCase()))
     );
     this.saveBrandOrder(brands.filter(brand => brand.name.toLowerCase() !== trimmed.toLowerCase()));
+    return true;
+  }
+
+  // ================= BACKUP & RESTORE API ================= //
+
+  createBackup() {
+    const backup = {
+      exported_at: new Date().toISOString(),
+      app: 'Mobile Price Tracker',
+      version: 1,
+      products: JSON.parse(localStorage.getItem(STORAGE_KEYS.PRODUCTS) || '[]'),
+      brands: JSON.parse(localStorage.getItem(STORAGE_KEYS.BRANDS) || '[]'),
+      imeis: JSON.parse(localStorage.getItem(STORAGE_KEYS.IMEIS) || '[]'),
+      price_history: JSON.parse(localStorage.getItem(STORAGE_KEYS.PRICE_HISTORY) || '[]'),
+      sold_imeis: JSON.parse(localStorage.getItem(STORAGE_KEYS.SOLD_IMEIS) || '[]'),
+      sales: JSON.parse(localStorage.getItem(STORAGE_KEYS.SALES) || '[]'),
+      accessory_brands: JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_BRANDS) || '[]'),
+      accessory_types: JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_TYPES) || '[]'),
+      accessory_stock: JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_STOCK) || '[]')
+    };
+
+    return backup;
+  }
+
+  async restoreBackup(backupData) {
+    if (!backupData || typeof backupData !== 'object') {
+      throw new Error('Invalid backup file');
+    }
+
+    const snapshot = backupData.data && typeof backupData.data === 'object' ? backupData.data : backupData;
+    const safeArray = (value) => Array.isArray(value) ? value : [];
+
+    const products = safeArray(snapshot.products);
+    const brands = safeArray(snapshot.brands);
+    const imeis = safeArray(snapshot.imeis);
+    const history = safeArray(snapshot.price_history || snapshot.priceHistory);
+    const soldImeis = safeArray(snapshot.sold_imeis || snapshot.soldImeis);
+    const sales = safeArray(snapshot.sales);
+    const accessoryBrands = safeArray(snapshot.accessory_brands || snapshot.accessoryBrands);
+    const accessoryTypes = safeArray(snapshot.accessory_types || snapshot.accessoryTypes);
+    const accessoryStock = safeArray(snapshot.accessory_stock || snapshot.accessoryStock);
+
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+    localStorage.setItem(STORAGE_KEYS.BRANDS, JSON.stringify(brands));
+    localStorage.setItem(STORAGE_KEYS.IMEIS, JSON.stringify(imeis));
+    localStorage.setItem(STORAGE_KEYS.PRICE_HISTORY, JSON.stringify(history));
+    localStorage.setItem(STORAGE_KEYS.SOLD_IMEIS, JSON.stringify(soldImeis));
+    localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(sales));
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_BRANDS, JSON.stringify(accessoryBrands));
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_TYPES, JSON.stringify(accessoryTypes));
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_STOCK, JSON.stringify(accessoryStock));
+
+    if (brands.length) {
+      this.saveBrandOrder(brands);
+    }
+
+    if (this.isLive && this.client) {
+      try {
+        await this.client.from('brands').upsert(brands.length ? brands.map(brand => ({
+          id: brand.id,
+          name: brand.name,
+          color: brand.color || '#2563eb',
+          created_at: brand.created_at || new Date().toISOString()
+        })) : [], { onConflict: 'id' });
+
+        await this.client.from('products').upsert(products.length ? products.map(product => ({
+          id: product.id,
+          brand: product.brand,
+          model: product.model,
+          variant: product.variant,
+          color: product.color,
+          current_dp: Number(product.current_dp ?? product.dp ?? 0),
+          current_mop: Number(product.current_mop ?? product.mop ?? 0),
+          current_mrp: Number(product.current_mrp ?? product.mrp ?? 0),
+          created_at: product.created_at || new Date().toISOString(),
+          updated_at: product.updated_at || new Date().toISOString()
+        })) : [], { onConflict: 'id' });
+
+        await this.client.from('imeis').upsert(imeis.length ? imeis.map(item => ({
+          id: item.id,
+          product_id: item.product_id,
+          imei: item.imei,
+          dp: item.dp,
+          mop: item.mop,
+          mrp: item.mrp,
+          notes: item.notes,
+          created_at: item.created_at || new Date().toISOString(),
+          updated_at: item.updated_at || new Date().toISOString()
+        })) : [], { onConflict: 'id' });
+
+        await this.client.from('price_history').upsert(history.length ? history.map(item => ({
+          id: item.id,
+          product_id: item.product_id,
+          old_dp: item.old_dp,
+          new_dp: item.new_dp,
+          old_mop: item.old_mop,
+          new_mop: item.new_mop,
+          old_mrp: item.old_mrp,
+          new_mrp: item.new_mrp,
+          changed_at: item.changed_at || new Date().toISOString()
+        })) : [], { onConflict: 'id' });
+
+        await this.client.from('sold_imeis').upsert(soldImeis.length ? soldImeis.map(item => ({
+          id: item.id,
+          product_id: item.product_id,
+          brand: item.brand,
+          model: item.model,
+          variant: item.variant,
+          imei: item.imei,
+          entry_dp: item.entry_dp,
+          mop: item.mop,
+          mrp: item.mrp,
+          remarks: item.remarks,
+          sold_at: item.sold_at || new Date().toISOString(),
+          created_at: item.created_at || new Date().toISOString(),
+          updated_at: item.updated_at || new Date().toISOString()
+        })) : [], { onConflict: 'id' });
+
+        await this.client.from('accessory_brands').upsert(accessoryBrands.length ? accessoryBrands.map(item => ({
+          id: item.id,
+          name: item.name,
+          created_at: item.created_at || new Date().toISOString()
+        })) : [], { onConflict: 'id' });
+
+        await this.client.from('accessory_types').upsert(accessoryTypes.length ? accessoryTypes.map(item => ({
+          id: item.id,
+          name: item.name,
+          created_at: item.created_at || new Date().toISOString()
+        })) : [], { onConflict: 'id' });
+
+        await this.client.from('accessory_stock').upsert(accessoryStock.length ? accessoryStock.map(item => ({
+          id: item.id,
+          brand: item.brand,
+          item_type: item.item_type,
+          serial_no: item.serial_no,
+          landing_price: Number(item.landing_price ?? 0),
+          qty: Number(item.qty ?? 1),
+          landing_price_per_pc: Number(item.landing_price_per_pc ?? (Number(item.landing_price ?? 0) / Math.max(Number(item.qty) || 1, 1))),
+          selling_price: Number(item.selling_price ?? 0),
+          mrp: Number(item.mrp ?? 0),
+          notes: item.notes,
+          created_at: item.created_at || new Date().toISOString(),
+          updated_at: item.updated_at || new Date().toISOString()
+        })) : [], { onConflict: 'id' });
+      } catch (err) {
+        console.warn('restoreBackup live sync warning:', err);
+      }
+    }
+
+    return true;
+  }
+
+  async syncOnlineDataToLocal() {
+    if (!this.isLive || !this.client) {
+      throw new Error('No live Supabase connection available');
+    }
+
+    const results = await Promise.all([
+      this.client.from('products').select('*'),
+      this.client.from('brands').select('*').order('name', { ascending: true }),
+      this.client.from('imeis').select('*'),
+      this.client.from('price_history').select('*'),
+      this.client.from('sold_imeis').select('*').order('sold_at', { ascending: false }),
+      this.client.from('accessory_brands').select('*').order('name', { ascending: true }),
+      this.client.from('accessory_types').select('*').order('name', { ascending: true }),
+      this.client.from('accessory_stock').select('*').order('created_at', { ascending: false })
+    ]);
+
+    const safeData = (res) => (res && !res.error && Array.isArray(res.data) ? res.data : []);
+
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(safeData(results[0])));
+    localStorage.setItem(STORAGE_KEYS.BRANDS, JSON.stringify(safeData(results[1])));
+    localStorage.setItem(STORAGE_KEYS.IMEIS, JSON.stringify(safeData(results[2])));
+    localStorage.setItem(STORAGE_KEYS.PRICE_HISTORY, JSON.stringify(safeData(results[3])));
+    localStorage.setItem(STORAGE_KEYS.SOLD_IMEIS, JSON.stringify(safeData(results[4])));
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_BRANDS, JSON.stringify(safeData(results[5])));
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_TYPES, JSON.stringify(safeData(results[6])));
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_STOCK, JSON.stringify(safeData(results[7])));
+
+    const brands = safeData(results[1]);
+    if (brands.length) {
+      this.saveBrandOrder(brands);
+    }
+
+    return true;
+  }
+
+  // ================= ACCESSORY STOCK API ================= //
+
+  async fetchAccessoryBrands() {
+    if (this.isLive && this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('accessory_brands')
+          .select('*')
+          .order('name', { ascending: true });
+        if (!error && data) {
+          localStorage.setItem(STORAGE_KEYS.ACCESSORY_BRANDS, JSON.stringify(data));
+          return data;
+        }
+      } catch (err) {
+        console.warn('fetchAccessoryBrands live fallback:', err);
+      }
+    }
+
+    return JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_BRANDS) || '[]');
+  }
+
+  async addAccessoryBrand(name) {
+    const trimmed = (name || '').trim();
+    if (!trimmed) throw new Error('Accessory brand name is required');
+
+    if (this.isLive && this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('accessory_brands')
+          .insert([{ name: trimmed }])
+          .select()
+          .single();
+        if (!error && data) return data;
+        if (error && error.code === '23505') throw new Error(`Accessory brand "${trimmed}" already exists`);
+        if (error) throw error;
+      } catch (err) {
+        console.warn('addAccessoryBrand live fallback:', err);
+      }
+    }
+
+    const brands = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_BRANDS) || '[]');
+    if (brands.some(item => String(item.name || '').toLowerCase() === trimmed.toLowerCase())) {
+      throw new Error(`Accessory brand "${trimmed}" already exists`);
+    }
+
+    const newBrand = {
+      id: 'acc-brand-' + Math.random().toString(36).slice(2, 10),
+      name: trimmed,
+      created_at: new Date().toISOString()
+    };
+    brands.push(newBrand);
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_BRANDS, JSON.stringify(brands));
+    return newBrand;
+  }
+
+  async fetchAccessoryTypes() {
+    if (this.isLive && this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('accessory_types')
+          .select('*')
+          .order('name', { ascending: true });
+        if (!error && data) {
+          localStorage.setItem(STORAGE_KEYS.ACCESSORY_TYPES, JSON.stringify(data));
+          return data;
+        }
+      } catch (err) {
+        console.warn('fetchAccessoryTypes live fallback:', err);
+      }
+    }
+
+    return JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_TYPES) || '[]');
+  }
+
+  async addAccessoryType(name) {
+    const trimmed = (name || '').trim();
+    if (!trimmed) throw new Error('Accessory type is required');
+
+    if (this.isLive && this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('accessory_types')
+          .insert([{ name: trimmed }])
+          .select()
+          .single();
+        if (!error && data) return data;
+        if (error && error.code === '23505') throw new Error(`Accessory type "${trimmed}" already exists`);
+        if (error) throw error;
+      } catch (err) {
+        console.warn('addAccessoryType live fallback:', err);
+      }
+    }
+
+    const types = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_TYPES) || '[]');
+    if (types.some(item => String(item.name || '').toLowerCase() === trimmed.toLowerCase())) {
+      throw new Error(`Accessory type "${trimmed}" already exists`);
+    }
+
+    const newType = {
+      id: 'acc-type-' + Math.random().toString(36).slice(2, 10),
+      name: trimmed,
+      created_at: new Date().toISOString()
+    };
+    types.push(newType);
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_TYPES, JSON.stringify(types));
+    return newType;
+  }
+
+  async updateAccessoryBrand(oldName, newName) {
+    const previous = String(oldName || '').trim();
+    const next = String(newName || '').trim();
+    if (!previous) throw new Error('Current accessory brand is required');
+    if (!next) throw new Error('New accessory brand name is required');
+
+    if (this.isLive && this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('accessory_brands')
+          .update({ name: next, updated_at: new Date().toISOString() })
+          .eq('name', previous)
+          .select()
+          .single();
+
+        if (error) {
+          if (error.code === '23505') throw new Error(`Accessory brand "${next}" already exists`);
+          throw error;
+        }
+
+        if (this.client && this.client.from) {
+          await this.client
+            .from('accessory_stock')
+            .update({ brand: next })
+            .eq('brand', previous);
+        }
+
+        const storedBrands = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_BRANDS) || '[]');
+        const updatedBrands = storedBrands.map(item =>
+          String(item.name || '').toLowerCase() === previous.toLowerCase() ? { ...item, name: next } : item
+        );
+        localStorage.setItem(STORAGE_KEYS.ACCESSORY_BRANDS, JSON.stringify(updatedBrands));
+
+        const stock = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_STOCK) || '[]');
+        const updatedStock = stock.map(item =>
+          String(item.brand || '').toLowerCase() === previous.toLowerCase() ? { ...item, brand: next } : item
+        );
+        localStorage.setItem(STORAGE_KEYS.ACCESSORY_STOCK, JSON.stringify(updatedStock));
+
+        return data || { name: next };
+      } catch (err) {
+        console.warn('updateAccessoryBrand live fallback:', err);
+        throw err;
+      }
+    }
+
+    const brands = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_BRANDS) || '[]');
+    const exists = brands.some(item => String(item.name || '').toLowerCase() === next.toLowerCase() && String(item.name || '').toLowerCase() !== previous.toLowerCase());
+    if (exists) throw new Error(`Accessory brand "${next}" already exists`);
+
+    const updatedBrands = brands.map(item =>
+      String(item.name || '').toLowerCase() === previous.toLowerCase() ? { ...item, name: next } : item
+    );
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_BRANDS, JSON.stringify(updatedBrands));
+
+    const stock = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_STOCK) || '[]');
+    const updatedStock = stock.map(item =>
+      String(item.brand || '').toLowerCase() === previous.toLowerCase() ? { ...item, brand: next } : item
+    );
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_STOCK, JSON.stringify(updatedStock));
+    return { name: next };
+  }
+
+  async deleteAccessoryBrand(name) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) throw new Error('Accessory brand is required');
+
+    if (this.isLive && this.client) {
+      try {
+        const { error } = await this.client
+          .from('accessory_brands')
+          .delete()
+          .eq('name', trimmed);
+        if (error) throw error;
+
+        await this.client
+          .from('accessory_stock')
+          .update({ brand: 'Unknown' })
+          .eq('brand', trimmed);
+      } catch (err) {
+        console.warn('deleteAccessoryBrand live fallback:', err);
+        throw err;
+      }
+    }
+
+    const brands = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_BRANDS) || '[]');
+    const filteredBrands = brands.filter(item => String(item.name || '').toLowerCase() !== trimmed.toLowerCase());
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_BRANDS, JSON.stringify(filteredBrands));
+
+    const stock = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_STOCK) || '[]');
+    const filteredStock = stock.map(item =>
+      String(item.brand || '').toLowerCase() === trimmed.toLowerCase() ? { ...item, brand: 'Unknown' } : item
+    );
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_STOCK, JSON.stringify(filteredStock));
+    return true;
+  }
+
+  async updateAccessoryType(oldName, newName) {
+    const previous = String(oldName || '').trim();
+    const next = String(newName || '').trim();
+    if (!previous) throw new Error('Current accessory type is required');
+    if (!next) throw new Error('New accessory type is required');
+
+    if (this.isLive && this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('accessory_types')
+          .update({ name: next })
+          .eq('name', previous)
+          .select()
+          .single();
+
+        if (error) {
+          if (error.code === '23505') throw new Error(`Accessory type "${next}" already exists`);
+          throw error;
+        }
+
+        await this.client
+          .from('accessory_stock')
+          .update({ item_type: next })
+          .eq('item_type', previous);
+
+        const storedTypes = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_TYPES) || '[]');
+        const updatedTypes = storedTypes.map(item =>
+          String(item.name || '').toLowerCase() === previous.toLowerCase() ? { ...item, name: next } : item
+        );
+        localStorage.setItem(STORAGE_KEYS.ACCESSORY_TYPES, JSON.stringify(updatedTypes));
+
+        const stock = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_STOCK) || '[]');
+        const updatedStock = stock.map(item =>
+          String(item.item_type || '').toLowerCase() === previous.toLowerCase() ? { ...item, item_type: next } : item
+        );
+        localStorage.setItem(STORAGE_KEYS.ACCESSORY_STOCK, JSON.stringify(updatedStock));
+
+        return data || { name: next };
+      } catch (err) {
+        console.warn('updateAccessoryType live fallback:', err);
+        throw err;
+      }
+    }
+
+    const types = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_TYPES) || '[]');
+    const exists = types.some(item => String(item.name || '').toLowerCase() === next.toLowerCase() && String(item.name || '').toLowerCase() !== previous.toLowerCase());
+    if (exists) throw new Error(`Accessory type "${next}" already exists`);
+
+    const updatedTypes = types.map(item =>
+      String(item.name || '').toLowerCase() === previous.toLowerCase() ? { ...item, name: next } : item
+    );
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_TYPES, JSON.stringify(updatedTypes));
+
+    const stock = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_STOCK) || '[]');
+    const updatedStock = stock.map(item =>
+      String(item.item_type || '').toLowerCase() === previous.toLowerCase() ? { ...item, item_type: next } : item
+    );
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_STOCK, JSON.stringify(updatedStock));
+    return { name: next };
+  }
+
+  async deleteAccessoryType(name) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) throw new Error('Accessory type is required');
+
+    if (this.isLive && this.client) {
+      try {
+        const { error } = await this.client
+          .from('accessory_types')
+          .delete()
+          .eq('name', trimmed);
+        if (error) throw error;
+
+        await this.client
+          .from('accessory_stock')
+          .update({ item_type: 'General' })
+          .eq('item_type', trimmed);
+      } catch (err) {
+        console.warn('deleteAccessoryType live fallback:', err);
+        throw err;
+      }
+    }
+
+    const types = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_TYPES) || '[]');
+    const filteredTypes = types.filter(item => String(item.name || '').toLowerCase() !== trimmed.toLowerCase());
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_TYPES, JSON.stringify(filteredTypes));
+
+    const stock = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_STOCK) || '[]');
+    const filteredStock = stock.map(item =>
+      String(item.item_type || '').toLowerCase() === trimmed.toLowerCase() ? { ...item, item_type: 'General' } : item
+    );
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_STOCK, JSON.stringify(filteredStock));
+    return true;
+  }
+
+  async fetchAccessoryStock() {
+    if (this.isLive && this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('accessory_stock')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (!error && data) {
+          localStorage.setItem(STORAGE_KEYS.ACCESSORY_STOCK, JSON.stringify(data));
+          return data;
+        }
+      } catch (err) {
+        console.warn('fetchAccessoryStock live fallback:', err);
+      }
+    }
+
+    return JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_STOCK) || '[]');
+  }
+
+  async saveAccessoryItem(item) {
+    const payload = {
+      id: item && item.id ? item.id : 'acc-item-' + Math.random().toString(36).slice(2, 10),
+      brand: String(item && item.brand ? item.brand : '').trim(),
+      item_type: String(item && item.item_type ? item.item_type : '').trim(),
+      serial_no: String(item && item.serial_no ? item.serial_no : '').trim(),
+      landing_price: Number(item && item.landing_price !== undefined && item.landing_price !== null ? item.landing_price : 0),
+      qty: Number(item && item.qty !== undefined && item.qty !== null ? item.qty : 1),
+      landing_price_per_pc: Number(item && item.landing_price_per_pc !== undefined && item.landing_price_per_pc !== null ? item.landing_price_per_pc : 0),
+      selling_price: Number(item && item.selling_price !== undefined && item.selling_price !== null ? item.selling_price : 0),
+      mrp: Number(item && item.mrp !== undefined && item.mrp !== null ? item.mrp : 0),
+      notes: String(item && item.notes ? item.notes : '').trim(),
+      updated_at: new Date().toISOString()
+    };
+
+    if (!payload.brand) throw new Error('Accessory brand is required');
+    if (!payload.item_type) throw new Error('Accessory type is required');
+    if (!Number.isFinite(payload.qty) || payload.qty < 1) throw new Error('Quantity must be at least 1');
+    if (!Number.isFinite(payload.landing_price) || payload.landing_price < 0) throw new Error('Landing price is invalid');
+    if (payload.qty > 0 && payload.landing_price_per_pc <= 0) {
+      payload.landing_price_per_pc = payload.landing_price / payload.qty;
+    }
+    if (!payload.id || !String(payload.id).startsWith('acc-item-')) {
+      payload.created_at = new Date().toISOString();
+    } else if (!payload.created_at) {
+      payload.created_at = new Date().toISOString();
+    }
+
+    if (this.isLive && this.client) {
+      try {
+        let result;
+        if (item && item.id) {
+          result = await this.client
+            .from('accessory_stock')
+            .update(payload)
+            .eq('id', item.id)
+            .select()
+            .single();
+        } else {
+          result = await this.client
+            .from('accessory_stock')
+            .insert([payload])
+            .select()
+            .single();
+        }
+        if (result && result.error) throw result.error;
+        if (result && result.data) {
+          const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_STOCK) || '[]');
+          const existingIndex = list.findIndex(row => String(row.id) === String(result.data.id));
+          if (existingIndex >= 0) list[existingIndex] = result.data;
+          else list.unshift(result.data);
+          localStorage.setItem(STORAGE_KEYS.ACCESSORY_STOCK, JSON.stringify(list));
+          return result.data;
+        }
+      } catch (err) {
+        console.warn('saveAccessoryItem live fallback:', err);
+      }
+    }
+
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_STOCK) || '[]');
+    const matchIndex = list.findIndex(row => String(row.id) === String(payload.id));
+    if (matchIndex >= 0) {
+      list[matchIndex] = { ...list[matchIndex], ...payload };
+    } else {
+      list.unshift(payload);
+    }
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_STOCK, JSON.stringify(list));
+    return payload;
+  }
+
+  async deleteAccessoryItem(id) {
+    if (!id) throw new Error('Accessory item id is required');
+
+    if (this.isLive && this.client) {
+      try {
+        const { error } = await this.client
+          .from('accessory_stock')
+          .delete()
+          .eq('id', id);
+        if (error) throw error;
+      } catch (err) {
+        console.warn('deleteAccessoryItem live fallback:', err);
+      }
+    }
+
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_STOCK) || '[]');
+    const filtered = list.filter(row => String(row.id) !== String(id));
+    localStorage.setItem(STORAGE_KEYS.ACCESSORY_STOCK, JSON.stringify(filtered));
     return true;
   }
 
@@ -563,102 +1227,6 @@ class SupabaseService {
       }
     }
     return JSON.parse(localStorage.getItem(STORAGE_KEYS.IMEIS) || '[]');
-  }
-
-  async createBackup() {
-    let brands = JSON.parse(localStorage.getItem(STORAGE_KEYS.BRANDS) || '[]');
-    let products = JSON.parse(localStorage.getItem(STORAGE_KEYS.PRODUCTS) || '[]');
-    let imeis = JSON.parse(localStorage.getItem(STORAGE_KEYS.IMEIS) || '[]');
-    let priceHistory = JSON.parse(localStorage.getItem(STORAGE_KEYS.PRICE_HISTORY) || '[]');
-    if (this.isLive && this.client) {
-      const [brandResult, productResult, imeiResult, historyResult] = await Promise.all([
-        this.client.from('brands').select('*'), this.client.from('products').select('*'),
-        this.client.from('imeis').select('*'), this.client.from('price_history').select('*')
-      ]);
-      if (brandResult.error || productResult.error || imeiResult.error || historyResult.error) throw new Error('Could not read all database tables for backup');
-      brands = brandResult.data || []; products = productResult.data || []; imeis = imeiResult.data || []; priceHistory = historyResult.data || [];
-    }
-    return { app: 'Mobile Price Tracker', version: 1, exported_at: new Date().toISOString(), brands, products, imeis, price_history: priceHistory };
-  }
-
-  async syncOnlineDataToLocal() {
-    if (!this.isLive || !this.client) throw new Error('Online database is not connected');
-    const [brandResult, productResult, imeiResult, historyResult] = await Promise.all([
-      this.client.from('brands').select('*'), this.client.from('products').select('*'),
-      this.client.from('imeis').select('*'), this.client.from('price_history').select('*')
-    ]);
-    const failed = [brandResult, productResult, imeiResult, historyResult].find(result => result.error);
-    if (failed) throw new Error(failed.error.message || 'Could not download online data');
-    localStorage.setItem(STORAGE_KEYS.BRANDS, JSON.stringify(brandResult.data || []));
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(productResult.data || []));
-    localStorage.setItem(STORAGE_KEYS.IMEIS, JSON.stringify(imeiResult.data || []));
-    localStorage.setItem(STORAGE_KEYS.PRICE_HISTORY, JSON.stringify(historyResult.data || []));
-    localStorage.setItem('mpt_last_sync_at', new Date().toISOString());
-    return true;
-  }
-
-  async restoreBackup(backup) {
-    if (!backup || !Array.isArray(backup.brands) || !Array.isArray(backup.products) || !Array.isArray(backup.imeis) || !Array.isArray(backup.price_history)) throw new Error('This is not a valid Mobile Price Tracker backup');
-    const data = { brands: backup.brands, products: backup.products, imeis: backup.imeis, priceHistory: backup.price_history };
-    if (this.isLive && this.client) {
-      const assertOk = (result, action) => { if (result.error) throw new Error(`${action}: ${result.error.message}`); };
-      assertOk(await this.client.from('price_history').delete().neq('id', ''), 'Could not clear price history');
-      assertOk(await this.client.from('imeis').delete().neq('id', ''), 'Could not clear IMEIs');
-      assertOk(await this.client.from('products').delete().neq('id', ''), 'Could not clear products');
-      assertOk(await this.client.from('brands').delete().neq('id', ''), 'Could not clear brands');
-      if (data.brands.length) assertOk(await this.client.from('brands').insert(data.brands), 'Could not restore brands');
-      if (data.products.length) assertOk(await this.client.from('products').insert(data.products), 'Could not restore products');
-      if (data.imeis.length) assertOk(await this.client.from('imeis').insert(data.imeis), 'Could not restore IMEIs');
-      if (data.priceHistory.length) assertOk(await this.client.from('price_history').insert(data.priceHistory), 'Could not restore price history');
-    }
-    localStorage.setItem(STORAGE_KEYS.BRANDS, JSON.stringify(data.brands));
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data.products));
-    localStorage.setItem(STORAGE_KEYS.IMEIS, JSON.stringify(data.imeis));
-    localStorage.setItem(STORAGE_KEYS.PRICE_HISTORY, JSON.stringify(data.priceHistory));
-    return true;
-  }
-
-  async findImeiForSale(imei) {
-    const code = (imei || '').trim();
-    if (!code) return null;
-    let unit, product;
-    if (this.isLive && this.client) {
-      const { data, error } = await this.client.from('imeis').select('*').eq('imei', code).maybeSingle();
-      if (error) throw error;
-      unit = data;
-      if (unit) { const result = await this.client.from('products').select('*').eq('id', unit.product_id).maybeSingle(); if (result.error) throw result.error; product = result.data; }
-    } else {
-      unit = (JSON.parse(localStorage.getItem(STORAGE_KEYS.IMEIS) || '[]')).find(item => item.imei === code);
-      if (unit) product = (JSON.parse(localStorage.getItem(STORAGE_KEYS.PRODUCTS) || '[]')).find(item => String(item.id) === String(unit.product_id));
-    }
-    if (!unit || !product) return null;
-    const first = (await this.fetchInitialPrices([product.id]))[String(product.id)] || {};
-    return { unit, product: { ...product, current_dp: Number(product.current_dp ?? product.dp ?? 0), current_mop: Number(product.current_mop ?? product.mop ?? 0), current_mrp: Number(product.current_mrp ?? product.mrp ?? 0) }, entry_dp: Number(first.dp ?? product.current_dp ?? product.dp ?? 0) };
-  }
-
-  async saveSaleAndRemoveImei(sale) {
-    if (!this.isLive || !this.client) throw new Error('Please connect to the online database before saving a sale');
-    const { product, unit, entry_dp, mop, mrp, remarks } = sale;
-    const priceHistory = await this.fetchPriceHistory(product.id);
-    const payload = { product_id: product.id, imei: unit.imei, brand: product.brand, model: product.model, variant: product.variant, color: product.color, entry_dp: Number(entry_dp), mop: Number(mop), mrp: Number(mrp), remarks: remarks || null, price_history: priceHistory, sold_at: new Date().toISOString() };
-    const insert = await this.client.from('sales').insert([payload]);
-    if (insert.error) throw new Error(insert.error.message);
-    const deleted = await this.client.from('imeis').delete().eq('id', unit.id);
-    if (deleted.error) throw new Error('Sale saved but IMEI could not be removed: ' + deleted.error.message);
-    const remaining = await this.client.from('imeis').select('id').eq('product_id', product.id).limit(1);
-    if (remaining.error) throw remaining.error;
-    if (!remaining.data || remaining.data.length === 0) {
-      const removeProduct = await this.client.from('products').delete().eq('id', product.id);
-      if (removeProduct.error) throw removeProduct.error;
-    }
-    return true;
-  }
-
-  async fetchSales() {
-    if (!this.isLive || !this.client) return [];
-    const { data, error } = await this.client.from('sales').select('*').order('sold_at', { ascending: false }).limit(50);
-    if (error) throw error;
-    return data || [];
   }
 
   async getProductById(id) {
@@ -1441,6 +2009,335 @@ class SupabaseService {
     return finalRecord;
   }
 
+  async findImeiForSale(imeiNumber) {
+    const trimmed = (imeiNumber || '').trim();
+    if (!trimmed) return null;
+
+    const normalized = trimmed.toLowerCase();
+
+    const soldImeis = JSON.parse(localStorage.getItem(STORAGE_KEYS.SOLD_IMEIS) || '[]');
+    const soldAlready = soldImeis.some(item => String(item.imei || '').toLowerCase() === normalized);
+    if (soldAlready) {
+      return null;
+    }
+
+    if (this.isLive && this.client) {
+      try {
+        const soldQuery = await this.client
+          .from('sold_imeis')
+          .select('id, imei')
+          .eq('imei', trimmed)
+          .limit(1);
+
+        if (!soldQuery.error && soldQuery.data && soldQuery.data.length > 0) {
+          return null;
+        }
+      } catch (_) {
+        // Ignore sold table check errors and continue stock lookup.
+      }
+
+      try {
+        const { data, error } = await this.client
+          .from('imeis')
+          .select('id, imei, product_id, dp, mop, mrp, notes')
+          .eq('imei', trimmed)
+          .limit(1);
+
+        if (!error && data && data.length > 0) {
+          const unit = data[0];
+          const { data: productRows, error: productError } = await this.client
+            .from('products')
+            .select('id, brand, model, variant, current_dp, current_mop, current_mrp')
+            .eq('id', unit.product_id)
+            .limit(1);
+
+          if (!productError && productRows && productRows.length > 0) {
+            const product = productRows[0];
+            return {
+              unit,
+              product,
+              entry_dp: unit.dp ?? product.current_dp ?? 0
+            };
+          }
+
+          return {
+            unit,
+            product: null,
+            entry_dp: unit.dp ?? 0
+          };
+        }
+      } catch (err) {
+        console.warn('findImeiForSale live lookup failed:', err);
+      }
+    }
+
+    const localImeis = JSON.parse(localStorage.getItem(STORAGE_KEYS.IMEIS) || '[]');
+    const match = localImeis.find(item => String(item.imei || '').toLowerCase() === normalized);
+    if (!match) return null;
+
+    const products = JSON.parse(localStorage.getItem(STORAGE_KEYS.PRODUCTS) || '[]');
+    const product = products.find(entry => String(entry.id) === String(match.product_id)) || null;
+
+    return {
+      unit: match,
+      product,
+      entry_dp: match.dp ?? product?.current_dp ?? 0
+    };
+  }
+
+  async fetchSales() {
+    let liveSales = [];
+    if (this.isLive && this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('sold_imeis')
+          .select('*')
+          .order('sold_at', { ascending: false });
+
+        if (!error && Array.isArray(data)) {
+          liveSales = data;
+        }
+      } catch (err) {
+        console.warn('fetchSales live query failed:', err);
+      }
+    }
+
+    const localSales = JSON.parse(localStorage.getItem(STORAGE_KEYS.SOLD_IMEIS) || '[]');
+    const merged = new Map();
+
+    [...liveSales, ...localSales].forEach(item => {
+      const key = String(item.id || item.imei || `${item.product_id}-${item.sold_at}`);
+      if (!merged.has(key)) {
+        merged.set(key, item);
+      }
+    });
+
+    const sales = Array.from(merged.values()).sort((a, b) => {
+      const tA = new Date(a.sold_at || a.created_at || 0).getTime();
+      const tB = new Date(b.sold_at || b.created_at || 0).getTime();
+      return tB - tA;
+    });
+
+    localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(sales));
+    return sales;
+  }
+
+  async saveSaleAndRemoveImei({ unit, product, entry_dp, mop, mrp, remarks }) {
+    if (!unit || !unit.imei) {
+      throw new Error('IMEI record is required to save a sale.');
+    }
+
+    const imei = String(unit.imei).trim();
+    const saleRecord = {
+      id: unit.id || ('sold-' + Math.random().toString(36).substr(2, 9)),
+      product_id: product?.id || unit.product_id || null,
+      brand: product?.brand || unit.brand || '',
+      model: product?.model || unit.model || '',
+      variant: product?.variant || unit.variant || '',
+      imei,
+      entry_dp: Number(entry_dp ?? unit.dp ?? product?.current_dp ?? 0),
+      mop: Number(mop ?? unit.mop ?? product?.current_mop ?? 0),
+      mrp: Number(mrp ?? unit.mrp ?? product?.current_mrp ?? 0),
+      remarks: remarks || unit.notes || '',
+      sold_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    if (this.isLive && this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('sold_imeis')
+          .insert([saleRecord])
+          .select();
+
+        if (error) {
+          if (error.code === '23505') {
+            throw new Error(`IMEI ${imei} is already recorded as sold.`);
+          }
+          throw new Error(`Could not save sold IMEI: ${error.message}`);
+        }
+
+        if (data && data[0]) {
+          Object.assign(saleRecord, data[0]);
+        }
+      } catch (err) {
+        console.warn('saveSaleAndRemoveImei live insert failed:', err);
+        if (String(err.message || '').includes('already recorded as sold')) {
+          throw err;
+        }
+      }
+
+      try {
+        const deleteResult = await this.client
+          .from('imeis')
+          .delete()
+          .eq('imei', imei);
+
+        if (deleteResult.error) {
+          console.warn('Could not remove sold IMEI from stock table:', deleteResult.error);
+        }
+      } catch (err) {
+        console.warn('delete sold IMEI from stock failed:', err);
+      }
+    }
+
+    const soldImeis = JSON.parse(localStorage.getItem(STORAGE_KEYS.SOLD_IMEIS) || '[]');
+    const exists = soldImeis.some(item => String(item.imei || '').toLowerCase() === imei.toLowerCase());
+    if (!exists) {
+      soldImeis.unshift(saleRecord);
+      localStorage.setItem(STORAGE_KEYS.SOLD_IMEIS, JSON.stringify(soldImeis));
+    }
+
+    const imeis = JSON.parse(localStorage.getItem(STORAGE_KEYS.IMEIS) || '[]');
+    const remaining = imeis.filter(item => String(item.imei || '').toLowerCase() !== imei.toLowerCase());
+    localStorage.setItem(STORAGE_KEYS.IMEIS, JSON.stringify(remaining));
+
+    const sales = JSON.parse(localStorage.getItem(STORAGE_KEYS.SALES) || '[]');
+    const salesExists = sales.some(item => String(item.imei || '').toLowerCase() === imei.toLowerCase());
+    if (!salesExists) {
+      sales.unshift(saleRecord);
+      localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(sales));
+    }
+
+    return saleRecord;
+  }
+
+  async restoreSoldImeiToStock(soldRecord) {
+    if (!soldRecord || !soldRecord.imei) {
+      throw new Error('Sold IMEI is required to restore into stock.');
+    }
+
+    const imei = String(soldRecord.imei).trim();
+    const products = JSON.parse(localStorage.getItem(STORAGE_KEYS.PRODUCTS) || '[]');
+    let productId = soldRecord.product_id || null;
+
+    if (!productId && (soldRecord.brand || soldRecord.model || soldRecord.variant)) {
+      const match = products.find(product => {
+        return String(product.brand || '').toLowerCase() === String(soldRecord.brand || '').toLowerCase() &&
+               String(product.model || '').toLowerCase() === String(soldRecord.model || '').toLowerCase() &&
+               String(product.variant || '').toLowerCase() === String(soldRecord.variant || '').toLowerCase();
+      });
+      if (match) productId = match.id;
+    }
+
+    if (!productId) {
+      throw new Error('Cannot restore IMEI because the original product was not found.');
+    }
+
+    const stockEntry = {
+      id: soldRecord.id || ('imei-' + Math.random().toString(36).substr(2, 9)),
+      product_id: productId,
+      imei,
+      dp: Number(soldRecord.entry_dp ?? 0),
+      mop: Number(soldRecord.mop ?? 0),
+      mrp: Number(soldRecord.mrp ?? 0),
+      notes: soldRecord.remarks || '',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    if (this.isLive && this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('imeis')
+          .insert([{
+            product_id: productId,
+            imei,
+            dp: stockEntry.dp,
+            mop: stockEntry.mop,
+            mrp: stockEntry.mrp,
+            notes: stockEntry.notes
+          }])
+          .select();
+
+        if (error) {
+          if (error.code === '23505') {
+            throw new Error(`IMEI ${imei} already exists in active stock.`);
+          }
+          throw new Error(`Could not restore IMEI to stock: ${error.message}`);
+        }
+
+        if (data && data[0]) {
+          Object.assign(stockEntry, data[0]);
+        }
+      } catch (err) {
+        console.warn('restoreSoldImeiToStock live insert failed:', err);
+        if (String(err.message || '').includes('already exists in active stock')) {
+          throw err;
+        }
+      }
+    }
+
+    const imeis = JSON.parse(localStorage.getItem(STORAGE_KEYS.IMEIS) || '[]');
+    const exists = imeis.some(item => String(item.imei || '').toLowerCase() === imei.toLowerCase());
+    if (!exists) {
+      imeis.unshift(stockEntry);
+      localStorage.setItem(STORAGE_KEYS.IMEIS, JSON.stringify(imeis));
+    }
+
+    const soldImeis = JSON.parse(localStorage.getItem(STORAGE_KEYS.SOLD_IMEIS) || '[]');
+    const keptSold = soldImeis.filter(item => String(item.imei || '').toLowerCase() !== imei.toLowerCase());
+    localStorage.setItem(STORAGE_KEYS.SOLD_IMEIS, JSON.stringify(keptSold));
+
+    const sales = JSON.parse(localStorage.getItem(STORAGE_KEYS.SALES) || '[]');
+    const filteredSales = sales.filter(item => String(item.imei || '').toLowerCase() !== imei.toLowerCase());
+    localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(filteredSales));
+
+    if (this.isLive && this.client) {
+      try {
+        const { error } = await this.client
+          .from('sold_imeis')
+          .delete()
+          .eq('imei', imei);
+        if (error) {
+          console.warn('Could not remove restored IMEI from sold_imeis:', error);
+        }
+      } catch (err) {
+        console.warn('delete restored sold IMEI failed:', err);
+      }
+    }
+
+    return stockEntry;
+  }
+
+  async deleteSoldImeiRecord(soldRecord) {
+    if (!soldRecord || !soldRecord.imei) {
+      throw new Error('Sold IMEI record is required for deletion.');
+    }
+
+    const imei = String(soldRecord.imei).trim();
+
+    if (this.isLive && this.client) {
+      try {
+        const id = soldRecord.id;
+        let res;
+        if (id) {
+          res = await this.client.from('sold_imeis').delete().eq('id', id);
+        }
+        if ((!id || res?.error) && imei) {
+          res = await this.client.from('sold_imeis').delete().eq('imei', imei);
+        }
+        if (res && res.error) {
+          throw new Error(res.error.message);
+        }
+      } catch (err) {
+        console.warn('deleteSoldImeiRecord live delete failed:', err);
+        throw new Error(`Could not delete sold record: ${err.message || 'Unknown error'}`);
+      }
+    }
+
+    let soldImeis = JSON.parse(localStorage.getItem(STORAGE_KEYS.SOLD_IMEIS) || '[]');
+    soldImeis = soldImeis.filter(item => String(item.imei || '').toLowerCase() !== imei.toLowerCase());
+    localStorage.setItem(STORAGE_KEYS.SOLD_IMEIS, JSON.stringify(soldImeis));
+
+    let sales = JSON.parse(localStorage.getItem(STORAGE_KEYS.SALES) || '[]');
+    sales = sales.filter(item => String(item.imei || '').toLowerCase() !== imei.toLowerCase());
+    localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(sales));
+
+    return true;
+  }
+
   async deleteImei(imeiId, imeiNumber = null) {
     if (!imeiId && !imeiNumber) return false;
 
@@ -1484,8 +2381,11 @@ const SUPABASE_SQL_SCHEMA = `-- ================================================
 CREATE TABLE IF NOT EXISTS public.brands (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL UNIQUE,
+    color TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
+
+ALTER TABLE IF EXISTS public.brands ADD COLUMN IF NOT EXISTS color TEXT;
 
 -- 2. Create PRODUCTS table
 CREATE TABLE IF NOT EXISTS public.products (
@@ -1519,10 +2419,10 @@ CREATE TABLE IF NOT EXISTS public.imeis (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
     imei TEXT NOT NULL UNIQUE,
-    dp NUMERIC,      -- Individual purchase / DP price for this specific IMEI
-    mop NUMERIC,     -- Individual MOP for this specific IMEI
-    mrp NUMERIC,     -- Individual MRP for this specific IMEI
-    notes TEXT,      -- Optional unit note (e.g. "Batch A", "Demo unit", "Grade A")
+    dp NUMERIC,
+    mop NUMERIC,
+    mrp NUMERIC,
+    notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
@@ -1534,20 +2434,75 @@ ALTER TABLE IF EXISTS public.imeis ADD COLUMN IF NOT EXISTS mrp NUMERIC;
 ALTER TABLE IF EXISTS public.imeis ADD COLUMN IF NOT EXISTS notes TEXT;
 ALTER TABLE IF EXISTS public.imeis ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
 
--- 5. Create Indexes for High Performance Search & Filters
+-- 5. Create Sold IMEIs table (for records removed from active stock)
+CREATE TABLE IF NOT EXISTS public.sold_imeis (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id UUID,
+    brand TEXT,
+    model TEXT,
+    variant TEXT,
+    imei TEXT NOT NULL UNIQUE,
+    entry_dp NUMERIC,
+    mop NUMERIC,
+    mrp NUMERIC,
+    remarks TEXT,
+    sold_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+-- 6. Create accessory brand and type master tables
+CREATE TABLE IF NOT EXISTS public.accessory_brands (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE TABLE IF NOT EXISTS public.accessory_types (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE TABLE IF NOT EXISTS public.accessory_stock (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    brand TEXT NOT NULL,
+    item_type TEXT NOT NULL,
+    serial_no TEXT,
+    landing_price NUMERIC NOT NULL DEFAULT 0,
+    qty INTEGER NOT NULL DEFAULT 1,
+    landing_price_per_pc NUMERIC NOT NULL DEFAULT 0,
+    selling_price NUMERIC NOT NULL DEFAULT 0,
+    mrp NUMERIC NOT NULL DEFAULT 0,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+-- 7. Create Indexes for High Performance Search & Filters
 CREATE INDEX IF NOT EXISTS idx_products_brand ON public.products (brand);
 CREATE INDEX IF NOT EXISTS idx_products_updated_at ON public.products (updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_price_history_product_id ON public.price_history (product_id);
 CREATE INDEX IF NOT EXISTS idx_price_history_changed_at ON public.price_history (changed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_imeis_product_id ON public.imeis (product_id);
 CREATE INDEX IF NOT EXISTS idx_imeis_number ON public.imeis (imei);
+CREATE INDEX IF NOT EXISTS idx_sold_imeis_product_id ON public.sold_imeis (product_id);
+CREATE INDEX IF NOT EXISTS idx_sold_imeis_imei ON public.sold_imeis (imei);
+CREATE INDEX IF NOT EXISTS idx_sold_imeis_sold_at ON public.sold_imeis (sold_at DESC);
+CREATE INDEX IF NOT EXISTS idx_accessory_stock_brand ON public.accessory_stock (brand);
+CREATE INDEX IF NOT EXISTS idx_accessory_stock_type ON public.accessory_stock (item_type);
+CREATE INDEX IF NOT EXISTS idx_accessory_stock_updated_at ON public.accessory_stock (updated_at DESC);
 
--- 6. Row Level Security (RLS) Policies
+-- 8. Row Level Security (RLS) Policies
 -- Enables public read/write access using the anonymous key
 ALTER TABLE public.brands ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.price_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.imeis ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sold_imeis ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.accessory_brands ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.accessory_types ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.accessory_stock ENABLE ROW LEVEL SECURITY;
 
 -- Brands RLS
 CREATE POLICY "Allow all access on brands" ON public.brands
@@ -1565,19 +2520,49 @@ CREATE POLICY "Allow all access on price_history" ON public.price_history
 CREATE POLICY "Allow all access on imeis" ON public.imeis
     FOR ALL USING (true) WITH CHECK (true);
 
--- 7. Seed Initial Popular Smartphone Brands
-INSERT INTO public.brands (name) VALUES
-    ('Apple'),
-    ('Samsung'),
+-- Sold IMEIs RLS
+CREATE POLICY "Allow all access on sold_imeis" ON public.sold_imeis
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- Accessory tables RLS
+CREATE POLICY "Allow all access on accessory_brands" ON public.accessory_brands
+    FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow all access on accessory_types" ON public.accessory_types
+    FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow all access on accessory_stock" ON public.accessory_stock
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- 9. Seed Initial Popular Smartphone Brands
+INSERT INTO public.brands (name, color) VALUES
+    ('Apple', '#8b5cf6'),
+    ('Samsung', '#1d4ed8'),
+    ('vivo', '#2563eb'),
+    ('OPPO', '#f97316'),
+    ('OnePlus', '#0f766e'),
+    ('realme', '#ec4899'),
+    ('Xiaomi', '#ef4444'),
+    ('iQOO', '#14b8a6'),
+    ('Motorola', '#f59e0b'),
+    ('Nothing', '#111827'),
+    ('Google Pixel', '#10b981')
+ON CONFLICT (name) DO UPDATE SET color = EXCLUDED.color;
+
+INSERT INTO public.accessory_brands (name) VALUES
     ('vivo'),
-    ('OPPO'),
-    ('OnePlus'),
-    ('realme'),
-    ('Xiaomi'),
-    ('iQOO'),
-    ('Motorola'),
-    ('Nothing'),
-    ('Google Pixel')
+    ('Samsung'),
+    ('Anker'),
+    ('Realme'),
+    ('OnePlus')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO public.accessory_types (name) VALUES
+    ('Headphone'),
+    ('USB-C Cable'),
+    ('Power Bank'),
+    ('Charger'),
+    ('Case')
 ON CONFLICT (name) DO NOTHING;
 `;
 
@@ -1588,22 +2573,37 @@ ALTER TABLE IF EXISTS public.imeis ADD COLUMN IF NOT EXISTS mop NUMERIC;
 ALTER TABLE IF EXISTS public.imeis ADD COLUMN IF NOT EXISTS mrp NUMERIC;
 ALTER TABLE IF EXISTS public.imeis ADD COLUMN IF NOT EXISTS notes TEXT;
 ALTER TABLE IF EXISTS public.imeis ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
-`;
 
-const SUPABASE_SALES_MIGRATION_SQL = `-- Run once in Supabase SQL Editor for the Sold IMEI page
-CREATE TABLE IF NOT EXISTS public.sales (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), product_id UUID, imei TEXT NOT NULL,
-  brand TEXT, model TEXT, variant TEXT, color TEXT,
-  entry_dp NUMERIC NOT NULL DEFAULT 0, mop NUMERIC NOT NULL DEFAULT 0, mrp NUMERIC NOT NULL DEFAULT 0,
-  remarks TEXT, price_history JSONB DEFAULT '[]'::jsonb,
-  sold_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+-- Accessory tables migration
+CREATE TABLE IF NOT EXISTS public.accessory_brands (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
-ALTER TABLE public.sales ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all access on sales" ON public.sales FOR ALL USING (true) WITH CHECK (true);
+
+CREATE TABLE IF NOT EXISTS public.accessory_types (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE TABLE IF NOT EXISTS public.accessory_stock (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    brand TEXT NOT NULL,
+    item_type TEXT NOT NULL,
+    serial_no TEXT,
+    landing_price NUMERIC NOT NULL DEFAULT 0,
+    qty INTEGER NOT NULL DEFAULT 1,
+    landing_price_per_pc NUMERIC NOT NULL DEFAULT 0,
+    selling_price NUMERIC NOT NULL DEFAULT 0,
+    mrp NUMERIC NOT NULL DEFAULT 0,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
 `;
 
 // Global instance
 window.dbService = new SupabaseService();
 window.SUPABASE_SQL_SCHEMA = SUPABASE_SQL_SCHEMA;
 window.SUPABASE_MIGRATION_SQL = SUPABASE_MIGRATION_SQL;
-window.SUPABASE_SALES_MIGRATION_SQL = SUPABASE_SALES_MIGRATION_SQL;

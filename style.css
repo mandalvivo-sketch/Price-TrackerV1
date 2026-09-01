@@ -262,9 +262,17 @@ body {
 }
 
 /* Search Bar */
+.search-box-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
 .search-box {
   position: relative;
   width: 100%;
+  flex: 1;
 }
 
 .search-icon {
@@ -313,6 +321,53 @@ body {
 
 .search-clear-btn.visible {
   display: block;
+}
+
+.search-scan-btn {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #91a9bd;
+  background: var(--header-search);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.search-scan-btn:hover {
+  border-color: var(--header-accent);
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+
+.search-scan-result {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.search-scan-result.hidden {
+  display: none;
+}
+
+.search-scan-label {
+  color: var(--text-muted);
+}
+
+.search-scan-value {
+  font-weight: 600;
+  word-break: break-all;
 }
 
 /* Brand Filter Chips */
@@ -1343,14 +1398,416 @@ body {
 .side-menu { position:fixed; z-index:311; top:0; right:0; bottom:0; width:min(330px, 88vw); padding:18px; background:var(--bg-surface); box-shadow:-12px 0 30px rgba(15,23,42,.18); transform:translateX(105%); transition:transform .25s ease; display:flex; flex-direction:column; gap:8px; }
 .side-menu.open { transform:translateX(0); }.side-menu-overlay.open { opacity:1; visibility:visible; }
 .side-menu-header { display:flex; align-items:center; justify-content:space-between; padding:4px 0 14px; border-bottom:1px solid var(--border-color); margin-bottom:4px; }.side-menu-header strong { display:block; font-size:18px; }.side-menu-header span { display:block; color:var(--text-muted); font-size:12px; margin-top:2px; }
+.side-menu-group { display:flex; flex-direction:column; gap:8px; margin-top:6px; }
+.side-menu-group-label { font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted); font-weight:700; padding:0 4px 2px; }
 .side-menu-link { display:flex; align-items:center; gap:10px; width:100%; padding:12px; border:1px solid var(--border-color); border-radius:var(--radius-md); background:var(--bg-surface); color:var(--text-primary); text-decoration:none; text-align:left; font:inherit; font-size:13px; font-weight:700; cursor:pointer; }.side-menu-link:hover { background:var(--bg-subtle); }.side-menu-link.restore { color:var(--danger); border-color:#fecaca; }.side-menu-warning { margin-top:8px; padding:10px; color:#9a3412; background:#fff7ed; border-radius:var(--radius-sm); font-size:11px; line-height:1.45; }
 .text-right { text-align: right; }
 .text-center { text-align: center; }
 .font-mono { font-family: var(--font-mono); }
-.badge {
-  display: inline-flex;
-  padding: 2px 6px;
+
+/* =========================================
+   BEAUTIFUL COLORFUL BRAND MANAGEMENT MODAL
+========================================= */
+
+.brand-modal {
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+.brand-modal .modal-header {
+  padding: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.brand-modal .modal-header h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.brand-modal-subtitle {
+  margin-top: 4px;
   font-size: 11px;
-  font-weight: 600;
-  border-radius: 4px;
+  color: var(--text-secondary);
+}
+
+.brand-modal .modal-body {
+  padding: 18px;
+}
+
+
+/* =========================================
+   BIG COLORFUL CARDS
+========================================= */
+
+.brand-card {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid var(--border-color);
+  border-radius: 16px;
+  padding: 18px;
+  margin-bottom: 16px;
+  background: var(--card-bg, transparent);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.brand-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.07);
+}
+
+.brand-card:last-child {
+  margin-bottom: 0;
+}
+
+
+/* Color strip on left */
+
+.brand-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+}
+
+
+/* Add - Blue */
+
+.brand-card:nth-child(1) {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: linear-gradient(
+    135deg,
+    rgba(37, 99, 235, 0.055),
+    transparent 65%
+  );
+}
+
+.brand-card:nth-child(1)::before {
+  background: #2563eb;
+}
+
+
+/* Edit - Purple */
+
+.brand-card:nth-child(2) {
+  border-color: rgba(124, 58, 237, 0.35);
+  background: linear-gradient(
+    135deg,
+    rgba(124, 58, 237, 0.055),
+    transparent 65%
+  );
+}
+
+.brand-card:nth-child(2)::before {
+  background: #7c3aed;
+}
+
+
+/* Delete - Red */
+
+.brand-delete-card {
+  border: 2px solid color-mix(
+    in srgb,
+    var(--danger) 40%,
+    var(--border-color)
+  );
+
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--danger) 6%, transparent),
+    transparent 70%
+  );
+}
+
+.brand-delete-card::before {
+  background: var(--danger);
+}
+
+
+/* =========================================
+   CARD HEADER
+========================================= */
+
+.brand-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.brand-card-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 21px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+
+/* Blue */
+
+.add-icon {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.13);
+  border: 1px solid rgba(37, 99, 235, 0.20);
+}
+
+
+/* Purple */
+
+.edit-icon {
+  color: #7c3aed;
+  background: rgba(124, 58, 237, 0.13);
+  border: 1px solid rgba(124, 58, 237, 0.20);
+}
+
+
+/* Red */
+
+.delete-icon {
+  color: var(--danger);
+  background: color-mix(
+    in srgb,
+    var(--danger) 13%,
+    transparent
+  );
+
+  border: 1px solid color-mix(
+    in srgb,
+    var(--danger) 20%,
+    transparent
+  );
+}
+
+
+.brand-card-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.brand-card-subtitle {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 3px;
+}
+
+
+/* =========================================
+   FORM AREA
+========================================= */
+
+.brand-card .form-group {
+  margin-bottom: 0;
+}
+
+.brand-card .form-label {
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 7px;
+}
+
+
+/* =========================================
+   BRAND COLOR
+========================================= */
+
+.brand-color-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px;
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.brand-color-input {
+  width: 52px;
+  min-width: 52px;
+  height: 42px;
+  padding: 3px;
+  border: 2px solid var(--border-color);
+  border-radius: 9px;
+  background: transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.brand-color-input:hover {
+  transform: scale(1.05);
+}
+
+.small-color {
+  width: 44px;
+  min-width: 44px;
+  height: 42px;
+}
+
+.brand-color-info {
+  min-width: 0;
+}
+
+.brand-color-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+
+
+/* =========================================
+   EDIT CONTROLS
+========================================= */
+
+.brand-edit-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-edit-controls .form-select {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+}
+
+.brand-edit-controls .btn {
+  height: 42px;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.brand-hint {
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+
+/* =========================================
+   DELETE CONTROLS
+========================================= */
+
+.brand-delete-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-delete-controls .form-select {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+}
+
+.brand-delete-controls .btn {
+  height: 42px;
+  min-width: 70px;
+  font-weight: 700;
+}
+
+
+/* Warning box */
+
+.brand-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+
+  background: color-mix(
+    in srgb,
+    var(--danger) 7%,
+    transparent
+  );
+
+  border: 1px solid color-mix(
+    in srgb,
+    var(--danger) 18%,
+    transparent
+  );
+
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+
+/* =========================================
+   FOOTER
+========================================= */
+
+.brand-modal .modal-footer {
+  padding: 14px 18px;
+  border-top: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.015);
+}
+
+.brand-modal .modal-footer .btn {
+  min-height: 42px;
+  font-weight: 700;
+}
+
+
+/* =========================================
+   MOBILE
+========================================= */
+
+@media (max-width: 480px) {
+
+  .brand-modal {
+    max-width: calc(100vw - 20px) !important;
+    border-radius: 16px;
+  }
+
+  .brand-modal .modal-header {
+    padding: 16px;
+  }
+
+  .brand-modal .modal-body {
+    padding: 13px;
+  }
+
+  .brand-card {
+    padding: 15px;
+    border-radius: 14px;
+  }
+
+  .brand-card-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+  }
+
+  .brand-edit-controls {
+    display: grid;
+    grid-template-columns: 1fr auto;
+  }
+
+  .brand-edit-controls .form-select {
+    grid-column: 1 / -1;
+  }
+
+  .brand-edit-controls .btn {
+    width: 100%;
+  }
+
+  .brand-delete-controls {
+    display: grid;
+    grid-template-columns: 1fr auto;
+  }
+
+  .brand-delete-controls .form-select {
+    min-width: 0;
+  }
 }

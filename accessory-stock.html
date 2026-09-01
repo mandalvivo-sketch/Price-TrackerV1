@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Accessory Stock · Mobile Price Tracker</title>
+  <link rel="stylesheet" href="style.css?v=20260831" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    body {
+      background: #f8fafc;
+    }
+
+    .accessory-page {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 0 14px 30px;
+    }
+
+    .accessory-topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+
+    .eyebrow {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .accessory-card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98));
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      border-radius: 22px;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+      overflow: hidden;
+    }
+
+    /* =========================================================
+       COLLAPSIBLE MASTER DATA
+       ========================================================= */
+
+    .accessory-doc {
+      padding: 0;
+    }
+
+    .accessory-master-toggle {
+      width: 100%;
+      border: none;
+      background: transparent;
+      padding: 15px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: pointer;
+      text-align: left;
+      color: var(--text-primary);
+    }
+
+    .accessory-master-toggle:hover {
+      background: rgba(248, 250, 252, 0.85);
+    }
+
+    .accessory-master-title {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .accessory-master-title strong {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .accessory-master-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .accessory-master-arrow {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      background: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      transition: transform 0.2s ease, background 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .accessory-doc.expanded .accessory-master-arrow {
+      transform: rotate(180deg);
+      background: #f8fafc;
+    }
+
+    .accessory-master-content {
+      display: none;
+      padding: 0 18px 18px;
+    }
+
+    .accessory-doc.expanded .accessory-master-content {
+      display: block;
+    }
+
+    .master-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .master-panel {
+      background: linear-gradient(180deg, rgba(15,23,42,0.02), rgba(96,165,250,0.03));
+      border: 1px solid rgba(148,163,184,0.22);
+      border-radius: 18px;
+      padding: 12px;
+    }
+
+    .master-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .master-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-height: 42px;
+    }
+
+    .master-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #ffffff;
+      border: 1px solid rgba(148,163,184,0.3);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .chip-action {
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+    }
+
+    .chip-action:hover {
+      background: rgba(148, 163, 184, 0.12);
+      color: var(--text-primary);
+    }
+
+    .accessory-form {
+      padding: 18px;
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .field.w-3 {
+      grid-column: span 3;
+    }
+
+    .field.w-4 {
+      grid-column: span 4;
+    }
+
+    .field.w-6 {
+      grid-column: span 6;
+    }
+
+    .field.w-12 {
+      grid-column: span 12;
+    }
+
+    .input-with-button {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .input-with-button .form-input,
+    .input-with-button .form-select {
+      flex: 1;
+    }
+
+    .stack-compact {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin-top: 14px;
+    }
+
+    .accessory-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 980px;
+      background: #fff;
+    }
+
+    .accessory-table th,
+    .accessory-table td {
+      border-bottom: 1px solid var(--border-color);
+      padding: 10px 10px;
+      text-align: left;
+      vertical-align: middle;
+      font-size: 13px;
+    }
+
+    .accessory-table thead th {
+      background: #f8fafc;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .accessory-table tbody tr:hover {
+      background: #f8fbff;
+    }
+
+    .accessory-badge {
+      display: inline-flex;
+      padding: 5px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      line-height: 1.2;
+      font-weight: 700;
+      color: #fff;
+      background: #2563eb;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+    }
+
+    .money {
+      font-family: var(--font-mono);
+      white-space: nowrap;
+      font-weight: 700;
+    }
+
+    .money.rp {
+      color: var(--dp-color);
+    }
+
+    .money.green {
+      color: var(--mop-color);
+    }
+
+    /* =========================================================
+       LONG PRESS / CONTEXT MENU
+       ========================================================= */
+
+    .accessory-longpress-menu {
+      position: fixed;
+      z-index: 99999;
+      width: 150px;
+      padding: 6px;
+      background: #ffffff;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 12px;
+      box-shadow: 0 14px 35px rgba(15, 23, 42, 0.18);
+      animation: accessoryMenuIn 0.12s ease-out;
+    }
+
+    .accessory-longpress-menu button {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      border: 0;
+      background: transparent;
+      padding: 10px 11px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      text-align: left;
+    }
+
+    .accessory-longpress-menu button:hover {
+      background: #f1f5f9;
+    }
+
+    .accessory-longpress-menu button.danger {
+      color: #dc2626;
+    }
+
+    .accessory-longpress-menu button.danger:hover {
+      background: #fef2f2;
+    }
+
+    @keyframes accessoryMenuIn {
+      from {
+        opacity: 0;
+        transform: translateY(-4px) scale(0.97);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .accessory-form {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .master-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .field.w-3,
+      .field.w-4,
+      .field.w-6,
+      .field.w-12 {
+        grid-column: span 2;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .accessory-page {
+        padding: 0 10px 26px;
+      }
+
+      .accessory-form {
+        grid-template-columns: 1fr;
+      }
+
+      .field.w-3,
+      .field.w-4,
+      .field.w-6,
+      .field.w-12 {
+        grid-column: span 1;
+      }
+
+      .header-top {
+        align-items: flex-start;
+      }
+
+      .title-text h1 {
+        font-size: 1.2rem;
+      }
+
+      .input-with-button {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .input-with-button .btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app-container accessory-page">
+
+    <header class="app-header">
+      <div class="header-top">
+
+        <div class="brand-title">
+          <button
+            class="app-icon app-menu-trigger"
+            id="appIcon"
+            aria-label="Open dashboard"
+          >
+            ₹
+          </button>
+
+          <div class="title-text">
+            <h1>Accessory Stock</h1>
+
+            <div class="status-tag">
+              <span class="status-dot" id="statusDot"></span>
+              <span id="statusLabel">Loading...</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <a class="btn btn-secondary btn-sm" href="index.html">
+            ← Dashboard
+          </a>
+        </div>
+
+      </div>
+    </header>
+
+    <main class="main-content">
+
+      <section class="accessory-topbar">
+        <div>
+          <p class="eyebrow">ACCESSORIES</p>
+
+          <h2 style="font-size:1.2rem; font-weight:700; margin-top:4px;">
+            Track stock, pricing, and serial entries
+          </h2>
+        </div>
+
+        <button class="btn btn-primary" id="btnResetForm">
+          + Add new item
+        </button>
+      </section>
+
+
+      <!-- =====================================================
+           COLLAPSIBLE BRANDS / TYPES
+           ===================================================== -->
+
+      <section class="accessory-card accessory-doc" id="accessoryMasterCard">
+
+        <button
+          type="button"
+          class="accessory-master-toggle"
+          id="accessoryMasterToggle"
+          aria-expanded="false"
+          aria-controls="accessoryMasterContent"
+        >
+          <span class="accessory-master-title">
+            <span class="eyebrow">MASTER DATA</span>
+            <strong>Accessory Brands & Types</strong>
+            <span class="accessory-master-subtitle">
+              Manage available accessory brands and types
+            </span>
+          </span>
+
+          <span
+            class="accessory-master-arrow"
+            id="accessoryMasterArrow"
+            aria-hidden="true"
+          >
+            ▼
+          </span>
+        </button>
+
+
+        <div
+          class="accessory-master-content"
+          id="accessoryMasterContent"
+        >
+
+          <div class="master-grid">
+
+            <div class="master-panel">
+
+              <div class="master-header">
+                <strong>Brands</strong>
+
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm"
+                  id="btnAddBrandMaster"
+                >
+                  + Add
+                </button>
+              </div>
+
+              <div
+                class="master-list"
+                id="brandMasterList"
+              ></div>
+
+            </div>
+
+
+            <div class="master-panel">
+
+              <div class="master-header">
+                <strong>Types</strong>
+
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm"
+                  id="btnAddTypeMaster"
+                >
+                  + Add
+                </button>
+              </div>
+
+              <div
+                class="master-list"
+                id="typeMasterList"
+              ></div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- =====================================================
+           ACCESSORY FORM
+           ===================================================== -->
+
+      <section class="accessory-card">
+
+        <form
+          id="accessoryForm"
+          class="accessory-form"
+        >
+
+          <input
+            type="hidden"
+            id="accessoryItemId"
+          />
+
+
+          <div class="field w-3">
+
+            <label
+              class="form-label"
+              for="accessoryBrandSelect"
+            >
+              Brand
+            </label>
+
+            <div class="input-with-button">
+
+              <select
+                class="form-select"
+                id="accessoryBrandSelect"
+                required
+              >
+                <option value="">
+                  -- Select Brand --
+                </option>
+              </select>
+
+              <button
+                type="button"
+                class="btn btn-secondary btn-sm"
+                id="btnAddAccessoryBrand"
+              >
+                + New
+              </button>
+
+            </div>
+
+          </div>
+
+
+          <div class="field w-3">
+
+            <label
+              class="form-label"
+              for="accessoryTypeSelect"
+            >
+              Type
+            </label>
+
+            <div class="input-with-button">
+
+              <select
+                class="form-select"
+                id="accessoryTypeSelect"
+                required
+              >
+                <option value="">
+                  -- Select Type --
+                </option>
+              </select>
+
+              <button
+                type="button"
+                class="btn btn-secondary btn-sm"
+                id="btnAddAccessoryType"
+              >
+                + New
+              </button>
+
+            </div>
+
+          </div>
+
+
+          <div class="field w-3">
+
+            <label
+              class="form-label"
+              for="accessorySerialInput"
+            >
+              Serial No
+            </label>
+
+            <input
+              type="text"
+              class="form-input"
+              id="accessorySerialInput"
+              placeholder="USB-C / Batch / Code"
+            />
+
+          </div>
+
+
+          <div class="field w-3">
+
+            <label
+              class="form-label"
+              for="accessoryQtyInput"
+            >
+              Qty
+            </label>
+
+            <input
+              type="number"
+              class="form-input"
+              id="accessoryQtyInput"
+              min="1"
+              value="1"
+              required
+            />
+
+          </div>
+
+
+          <div class="field w-3">
+
+            <label
+              class="form-label"
+              for="accessoryLandingInput"
+            >
+              Landing Price
+            </label>
+
+            <div class="price-input-wrapper">
+
+              <span class="currency-prefix">₹</span>
+
+              <input
+                type="number"
+                class="form-input"
+                id="accessoryLandingInput"
+                min="0"
+                step="1"
+                required
+              />
+
+            </div>
+
+          </div>
+
+
+          <div class="field w-3">
+
+            <label
+              class="form-label"
+              for="accessoryPerPcInput"
+            >
+              Per PC Landing
+            </label>
+
+            <div class="price-input-wrapper">
+
+              <span class="currency-prefix">₹</span>
+
+              <input
+                type="number"
+                class="form-input"
+                id="accessoryPerPcInput"
+                min="0"
+                step="1"
+                readonly
+              />
+
+            </div>
+
+          </div>
+
+
+          <div class="field w-3">
+
+            <label
+              class="form-label"
+              for="accessorySellingInput"
+            >
+              Selling Price
+            </label>
+
+            <div class="price-input-wrapper">
+
+              <span class="currency-prefix">₹</span>
+
+              <input
+                type="number"
+                class="form-input"
+                id="accessorySellingInput"
+                min="0"
+                step="1"
+                required
+              />
+
+            </div>
+
+          </div>
+
+
+          <div class="field w-3">
+
+            <label
+              class="form-label"
+              for="accessoryMrpInput"
+            >
+              MRP
+            </label>
+
+            <div class="price-input-wrapper">
+
+              <span class="currency-prefix">₹</span>
+
+              <input
+                type="number"
+                class="form-input"
+                id="accessoryMrpInput"
+                min="0"
+                step="1"
+                required
+              />
+
+            </div>
+
+          </div>
+
+
+          <div class="field w-12">
+
+            <label
+              class="form-label"
+              for="accessoryNotesInput"
+            >
+              Note
+            </label>
+
+            <input
+              type="text"
+              class="form-input"
+              id="accessoryNotesInput"
+              placeholder="Optional note"
+            />
+
+          </div>
+
+
+          <div
+            class="field w-12"
+            style="margin-top:4px;"
+          >
+
+            <div class="stack-compact">
+
+              <button
+                type="submit"
+                class="btn btn-primary"
+                id="btnSaveAccessory"
+              >
+                Save Accessory
+              </button>
+
+              <button
+                type="button"
+                class="btn btn-secondary"
+                id="btnCancelAccessoryEdit"
+              >
+                Cancel
+              </button>
+
+            </div>
+
+          </div>
+
+        </form>
+
+      </section>
+
+
+      <!-- =====================================================
+           ACCESSORY INVENTORY
+           ===================================================== -->
+
+      <section
+        class="accessory-card"
+        style="margin-top:20px;"
+      >
+
+        <div
+          style="
+            padding:16px;
+            border-bottom:1px solid var(--border-color);
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:12px;
+            flex-wrap:wrap;
+          "
+        >
+
+          <div>
+
+            <div class="eyebrow">
+              LIST
+            </div>
+
+            <h3
+              style="
+                font-size:1rem;
+                font-weight:700;
+                margin-top:4px;
+              "
+            >
+              Accessory inventory
+            </h3>
+
+          </div>
+
+
+          <input
+            type="text"
+            class="form-input"
+            id="accessorySearch"
+            placeholder="Search brand, type, serial, note"
+            style="max-width:300px;"
+          />
+
+        </div>
+
+
+        <div class="table-wrap">
+
+          <table class="accessory-table">
+
+            <thead>
+
+              <tr>
+                <th>Brand</th>
+                <th>Type</th>
+                <th>Serial No</th>
+                <th>Qty</th>
+                <th>Landing</th>
+                <th>Per PC</th>
+                <th>Selling</th>
+                <th>MRP</th>
+                <th>Note</th>
+                <th>Action</th>
+              </tr>
+
+            </thead>
+
+
+            <tbody id="accessoryTableBody"></tbody>
+
+          </table>
+
+        </div>
+
+      </section>
+
+    </main>
+
+  </div>
+
+
+  <script src="supabase.js?v=20260832"></script>
+  <script src="accessory-stock.js?v=20260832"></script>
+
+
+  <!-- =========================================================
+       COLLAPSE / EXPAND SCRIPT
+       Existing accessory-stock.js functions remain unchanged.
+       ========================================================= -->
+
+  <script>
+    (function () {
+      const masterCard = document.getElementById('accessoryMasterCard');
+      const masterToggle = document.getElementById('accessoryMasterToggle');
+
+      if (!masterCard || !masterToggle) return;
+
+      masterToggle.addEventListener('click', function () {
+        const expanded = masterCard.classList.toggle('expanded');
+
+        masterToggle.setAttribute(
+          'aria-expanded',
+          String(expanded)
+        );
+      });
+    }());
+  </script>
+
+</body>
+</html>
