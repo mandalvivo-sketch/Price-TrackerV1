@@ -55,11 +55,14 @@
       row.mrp += Number(item.mrp || 0);
     });
 
+    const sortedBrands = Array.from(byBrand.values()).sort((a, b) => b.landing - a.landing);
+    const totalQty = Math.max(totals.qty, 1);
+
     els.metricGrid.innerHTML = [
       ['Items', totals.items, 'blue'],
       ['Qty', totals.qty, 'purple'],
       ['Landing Value', formatMoney(totals.landing), 'orange'],
-      ['Selling Value', formatMoney(totals.selling), 'green']
+      ['Per PC Avg', formatMoney(totals.landing / totalQty), 'green']
     ].map(([label, value, color]) => `
       <article class="metric-card ${color}">
         <span>${label}</span>
@@ -67,18 +70,43 @@
       </article>
     `).join('');
 
-    const sortedBrands = Array.from(byBrand.values()).sort((a, b) => b.landing - a.landing);
+    els.brandSummaryBody.innerHTML = sortedBrands.map((row) => {
+      const perPc = row.qty > 0 ? row.landing / row.qty : 0;
+      return `
+        <tr>
+          <td><span class="tiny-badge">${escapeHtml(row.brand)}</span></td>
+          <td>${row.items}</td>
+          <td>${row.qty}</td>
+          <td class="money">${formatMoney(row.landing)}</td>
+          <td class="money">${formatMoney(perPc)}</td>
+          <td class="money">${formatMoney(row.selling)}</td>
+          <td class="money">${formatMoney(row.mrp)}</td>
+          <td>
+            <button type="button" class="btn btn-danger btn-sm" data-action="delete-brand" data-brand="${escapeHtml(row.brand)}">Delete</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
 
-    els.brandSummaryBody.innerHTML = sortedBrands.map((row) => `
-      <tr>
-        <td><span class="tiny-badge">${escapeHtml(row.brand)}</span></td>
-        <td>${row.items}</td>
-        <td>${row.qty}</td>
-        <td class="money">${formatMoney(row.landing)}</td>
-        <td class="money">${formatMoney(row.selling)}</td>
-        <td class="money">${formatMoney(row.mrp)}</td>
-      </tr>
-    `).join('');
+    els.brandSummaryBody.querySelectorAll('[data-action="delete-brand"]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const brand = button.getAttribute('data-brand');
+        if (!brand) return;
+
+        const confirmed = window.confirm(`Delete accessory brand "${brand}" and related stock entries?`);
+        if (!confirmed) return;
+
+        try {
+          if (window.dbService && typeof window.dbService.deleteAccessoryBrand === 'function') {
+            await window.dbService.deleteAccessoryBrand(brand);
+          }
+          await refreshData();
+        } catch (error) {
+          console.error('Accessory brand delete failed:', error);
+          window.alert(error.message || 'Unable to delete accessory brand.');
+        }
+      });
+    });
   }
 
   async function refreshData() {
