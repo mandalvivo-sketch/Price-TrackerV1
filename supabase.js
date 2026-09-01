@@ -1002,8 +1002,8 @@ class SupabaseService {
   }
 
   async saveAccessoryItem(item) {
+    const localId = item && item.id ? item.id : 'acc-item-' + Math.random().toString(36).slice(2, 10);
     const payload = {
-      id: item && item.id ? item.id : 'acc-item-' + Math.random().toString(36).slice(2, 10),
       brand: String(item && item.brand ? item.brand : '').trim(),
       item_type: String(item && item.item_type ? item.item_type : '').trim(),
       serial_no: String(item && item.serial_no ? item.serial_no : '').trim(),
@@ -1023,52 +1023,63 @@ class SupabaseService {
     if (payload.qty > 0 && payload.landing_price_per_pc <= 0) {
       payload.landing_price_per_pc = payload.landing_price / payload.qty;
     }
-    if (!payload.id || !String(payload.id).startsWith('acc-item-')) {
-      payload.created_at = new Date().toISOString();
-    } else if (!payload.created_at) {
-      payload.created_at = new Date().toISOString();
-    }
+
+    let liveSavedData = null;
+    let liveSaveSucceeded = false;
 
     if (this.isLive && this.client) {
       try {
-        let result;
-        if (item && item.id) {
-          result = await this.client
+        const hasValidUuid = Boolean(item && item.id && this.isValidUuid(String(item.id)));
+        const livePayload = { ...payload };
+
+        if (hasValidUuid) {
+          liveSavedData = await this.client
             .from('accessory_stock')
-            .update(payload)
+            .update(livePayload)
             .eq('id', item.id)
             .select()
             .single();
         } else {
-          result = await this.client
+          liveSavedData = await this.client
             .from('accessory_stock')
-            .insert([payload])
+            .insert([livePayload])
             .select()
             .single();
         }
-        if (result && result.error) throw result.error;
-        if (result && result.data) {
+
+        if (liveSavedData && liveSavedData.error) {
+          throw liveSavedData.error;
+        }
+
+        if (liveSavedData && liveSavedData.data) {
+          liveSaveSucceeded = true;
           const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_STOCK) || '[]');
-          const existingIndex = list.findIndex(row => String(row.id) === String(result.data.id));
-          if (existingIndex >= 0) list[existingIndex] = result.data;
-          else list.unshift(result.data);
+          const existingIndex = list.findIndex(row => String(row.id) === String(liveSavedData.data.id));
+          if (existingIndex >= 0) list[existingIndex] = liveSavedData.data;
+          else list.unshift(liveSavedData.data);
           localStorage.setItem(STORAGE_KEYS.ACCESSORY_STOCK, JSON.stringify(list));
-          return result.data;
+          return { ...liveSavedData.data, savedLive: true, savedLocally: false };
         }
       } catch (err) {
         console.warn('saveAccessoryItem live fallback:', err);
       }
     }
 
+    const localPayload = {
+      ...payload,
+      id: localId,
+      created_at: new Date().toISOString()
+    };
+
     const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.ACCESSORY_STOCK) || '[]');
-    const matchIndex = list.findIndex(row => String(row.id) === String(payload.id));
+    const matchIndex = list.findIndex(row => String(row.id) === String(localId));
     if (matchIndex >= 0) {
-      list[matchIndex] = { ...list[matchIndex], ...payload };
+      list[matchIndex] = { ...list[matchIndex], ...localPayload };
     } else {
-      list.unshift(payload);
+      list.unshift(localPayload);
     }
     localStorage.setItem(STORAGE_KEYS.ACCESSORY_STOCK, JSON.stringify(list));
-    return payload;
+    return { ...localPayload, savedLive: false, savedLocally: true };
   }
 
   async deleteAccessoryItem(id) {

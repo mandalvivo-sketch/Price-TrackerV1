@@ -1022,57 +1022,264 @@
   }
 
   async function startCameraStream(cameraId) {
+
     if (state.isScanning && state.html5QrCode) {
-      await state.html5QrCode.stop();
+      try {
+        await state.html5QrCode.stop();
+      } catch (e) {
+        console.warn('Previous scanner stop error:', e);
+      }
+
       state.isScanning = false;
     }
 
     const config = {
-      fps: 20,
-      // Code 128 is a wide, linear barcode, so use a wide scan region instead
-      // of the square region that is intended mainly for QR codes.
-      qrbox: (viewfinderWidth) => {
-        const width = Math.floor(viewfinderWidth * 0.9);
-        return { width, height: Math.max(80, Math.min(140, Math.floor(width * 0.38))) };
+
+      fps: 15,
+
+      // Code 128 is a wide linear barcode
+
+      qrbox: (viewfinderWidth, viewfinderHeight) => {
+
+        const width = Math.floor(viewfinderWidth * 0.92);
+
+        // Keep enough height for a wide barcode
+
+        const height = Math.max(
+
+          100,
+
+          Math.min(
+
+            180,
+
+            Math.floor(width * 0.42)
+
+          )
+
+        );
+
+        return {
+
+          width,
+
+          height
+
+        };
+
       },
-      aspectRatio: 4 / 3
+
+      // Better mobile camera preview
+
+      aspectRatio: 4 / 3,
+
+      // Important for mobile camera
+
+      videoConstraints: {
+
+        deviceId: {
+
+          exact: cameraId
+
+        },
+
+        facingMode: {
+
+          ideal: 'environment'
+
+        },
+
+        width: {
+
+          ideal: 1920
+
+        },
+
+        height: {
+
+          ideal: 1080
+
+        }
+
+      }
+
     };
 
     await state.html5QrCode.start(
-      // Passing the detected camera ID directly works across modern browsers;
-      // autofocus is applied after the stream has started when supported.
-      cameraId,
-      config,
-      (decodedText) => {
-        onBarcodeScanned(decodedText);
+
+      {
+
+        deviceId: {
+
+          exact: cameraId
+
+        }
+
       },
+
+      config,
+
+      (decodedText) => {
+
+        onBarcodeScanned(decodedText);
+
+      },
+
       (errorMessage) => {
-        // Continuous frame errors are normal while seeking barcode
+
+        // Normal while searching for barcode
+
       }
+
     );
+
     state.isScanning = true;
-    await enableContinuousFocus();
+
+    // Give Chrome/Android camera a moment to initialise
+
+    setTimeout(async () => {
+
+      await enableContinuousFocus();
+
+    }, 700);
+
+    // Try again after the camera has fully settled
+
+    setTimeout(async () => {
+
+      await enableContinuousFocus();
+
+    }, 1800);
+
   }
 
   async function enableContinuousFocus() {
-    // Focus controls are hardware/browser dependent. Request continuous focus
-    // only when the active camera reports that it supports the mode.
-    if (!state.html5QrCode || !state.html5QrCode.getRunningTrackCapabilities || !state.html5QrCode.applyVideoConstraints) return;
 
-    try {
-      const capabilities = state.html5QrCode.getRunningTrackCapabilities();
-      const focusModes = capabilities && capabilities.focusMode;
-      if (!Array.isArray(focusModes) || !focusModes.includes('continuous')) return;
+  if (!state.html5QrCode) return;
+
+  if (
+
+    typeof state.html5QrCode.getRunningTrackCapabilities !== 'function' ||
+
+    typeof state.html5QrCode.applyVideoConstraints !== 'function'
+
+  ) {
+
+    return;
+
+  }
+
+  try {
+
+    const capabilities =
+
+      state.html5QrCode.getRunningTrackCapabilities();
+
+    console.log('Camera capabilities:', capabilities);
+
+    const focusModes = capabilities?.focusMode;
+
+    if (
+
+      Array.isArray(focusModes) &&
+
+      focusModes.includes('continuous')
+
+    ) {
 
       await state.html5QrCode.applyVideoConstraints({
-        advanced: [{ focusMode: 'continuous' }]
+
+        advanced: [
+
+          {
+
+            focusMode: 'continuous'
+
+          }
+
+        ]
+
       });
-    } catch (err) {
-      // Autofocus is optional; scanning should still work on cameras that
-      // expose capabilities but reject focus constraints.
-      console.info('Continuous autofocus is unavailable on this camera.', err);
+
+      console.log('Continuous autofocus enabled');
+
     }
+
+    // Some Android cameras expose zoom.
+
+    // A tiny zoom can sometimes help Code 128 recognition.
+
+    if (
+
+      capabilities?.zoom &&
+
+      typeof capabilities.zoom.min === 'number' &&
+
+      typeof capabilities.zoom.max === 'number'
+
+    ) {
+
+      const minZoom = capabilities.zoom.min;
+
+      const maxZoom = capabilities.zoom.max;
+
+      if (maxZoom > minZoom) {
+
+        const currentZoom =
+
+          typeof capabilities.zoom.min === 'number'
+
+            ? Math.max(minZoom, Math.min(maxZoom, minZoom + 0.05))
+
+            : minZoom;
+
+        try {
+
+          await state.html5QrCode.applyVideoConstraints({
+
+            advanced: [
+
+              {
+
+                focusMode: 'continuous',
+
+                zoom: currentZoom
+
+              }
+
+            ]
+
+          });
+
+        } catch (zoomError) {
+
+          console.info(
+
+            'Zoom constraint unavailable:',
+
+            zoomError
+
+          );
+
+        }
+
+      }
+
+    }
+
+  } catch (err) {
+
+    console.info(
+
+      'Continuous autofocus is unavailable on this camera.',
+
+      err
+
+    );
+
   }
+
+}
 
   async function onBarcodeScanned(scannedCode) {
     if (state.isProcessingScan) return;

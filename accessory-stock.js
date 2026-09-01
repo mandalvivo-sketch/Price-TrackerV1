@@ -371,10 +371,17 @@
     };
 
     try {
-      await window.dbService.saveAccessoryItem(item);
+      const result = await window.dbService.saveAccessoryItem(item);
       fillAccessoryForm(null);
       await loadAccessoryData();
-      showAlert('Accessory stock saved successfully.');
+
+      if (result && result.savedLive) {
+        showAlert('Accessory stock saved successfully.');
+      } else if (result && result.savedLocally) {
+        showAlert('Saved locally. Live Supabase sync failed. Please check DB connection.');
+      } else {
+        showAlert('Accessory stock saved successfully.');
+      }
     } catch (error) {
       showAlert(error.message || 'Unable to save accessory data.');
     }
