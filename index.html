@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Mobile Price Tracker</title>
   <meta name="description" content="Mobile price tracking system with live history, IMEI scanning, and Supabase integration." />
-  <link rel="stylesheet" href="style.css?v=20260831" />
+  <link rel="stylesheet" href="style.css?v=20261021" />
   <link rel="stylesheet" href="price-list.css?v=20261014" />
   <!-- Supabase JS Client via CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -111,8 +111,8 @@
         </div>
         <div class="price-list-wrap">
           <table class="price-list-table">
-            <thead><tr><th>Brand</th><th>Model</th><th class="right">DP</th><th class="right">MOP</th><th class="right">MRP</th></tr></thead>
-            <tbody id="priceListBody"><tr><td colspan="5" class="price-list-message">Open Price List to load prices.</td></tr></tbody>
+              <thead><tr><th>Brand</th><th>Model</th><th>Variant</th><th class="right">DP</th><th class="right">MOP</th><th class="right">MRP</th></tr></thead>
+              <tbody id="priceListBody"><tr><td colspan="6" class="price-list-message">Open Price List to load prices.</td></tr></tbody>
           </table>
         </div>
       </section>
@@ -190,12 +190,13 @@
           <!-- Model Name -->
           <div class="form-group">
             <label class="form-label" for="productModelInput">Model Name <span style="color:var(--danger)">*</span></label>
-            <input type="text" class="form-input" id="productModelInput" placeholder="e.g. X200, S25, 13 Pro" required />
+            <input type="text" class="form-input" id="productModelInput" list="productModelOptions" placeholder="Select a model or type a new one" autocomplete="off" required />
+            <datalist id="productModelOptions"></datalist>
           </div>
 
           <!-- Variant & Color -->
           <div class="form-row-2">
-            <div class="form-group">
+            <div class="form-group variant-field">
               <label class="form-label" for="productVariantInput">Variant <span class="optional">(Optional)</span></label>
               <input type="text" class="form-input" id="productVariantInput" placeholder="e.g. 12/256, 8/128" />
             </div>
@@ -606,6 +607,6 @@
 
   <!-- Application Logic Scripts -->
   <script src="supabase.js?v=20261020"></script>
-  <script src="app.js?v=20261017"></script>
+  <script src="app.js?v=20261022"></script>
 </body>
 </html>

@@ -27,6 +27,7 @@
   };
   let productLoadSequence = 0;
   let priceListLoadSequence = 0;
+  let modelSuggestionSequence = 0;
 
   // DOM Elements Cache
   const el = {
@@ -295,6 +296,43 @@
     el.productBrandSelect.innerHTML = defaultOption + optionsHtml;
   }
 
+  async function refreshProductModelOptions(brandName = el.productBrandSelect.value) {
+    const requestId = ++modelSuggestionSequence;
+    const brand = String(brandName || '').trim();
+    const models = new Map();
+    const addModels = products => {
+      (products || []).forEach(product => {
+        if (String(product.brand || '').toLowerCase() !== brand.toLowerCase()) return;
+        const model = String(product.model || '').trim();
+        if (model && !models.has(model.toLowerCase())) models.set(model.toLowerCase(), model);
+      });
+    };
+
+    if (brand) {
+      addModels(state.products);
+      const currentModel = String(el.productModelInput.value || '').trim();
+      if (currentModel) models.set(currentModel.toLowerCase(), currentModel);
+      renderProductModelOptions(models);
+      try {
+        const products = await window.dbService.fetchProducts('', brand);
+        if (requestId !== modelSuggestionSequence || brand.toLowerCase() !== el.productBrandSelect.value.toLowerCase()) return;
+        addModels(products);
+      } catch (error) {
+        // Keep local suggestions available if the online lookup fails.
+      }
+    }
+    if (requestId === modelSuggestionSequence) renderProductModelOptions(models);
+  }
+
+  function renderProductModelOptions(models) {
+    const datalist = document.getElementById('productModelOptions');
+    if (!datalist) return;
+    datalist.innerHTML = [...models.values()]
+      .sort((a, b) => a.localeCompare(b))
+      .map(model => `<option value="${escapeHtml(model)}"></option>`)
+      .join('');
+  }
+
   async function loadProducts(localOnly = false) {
     const loadSequence = ++productLoadSequence;
     try {
@@ -426,6 +464,7 @@
     el.productImeiValidationMsg.textContent = '';
 
     renderBrandSelectOptions();
+    refreshProductModelOptions('');
     el.productModalOverlay.classList.add('active');
     setTimeout(() => {
       if (el.productBrandSelect) el.productBrandSelect.focus();
@@ -437,9 +476,10 @@
     if (!product) return;
 
     el.editProductId.value = product.id;
-    el.productModalTitle.textContent = `Edit Mobile - ${product.brand} ${product.model}`;
+    el.productModalTitle.innerHTML = `Edit Mobile - ${escapeHtml(product.brand)} ${escapeHtml(product.model)} <span class="variant-tag">${escapeHtml(product.variant || 'Standard')}</span>`;
     renderBrandSelectOptions(product.brand);
     el.productModelInput.value = product.model;
+    refreshProductModelOptions(product.brand);
     el.productVariantInput.value = product.variant || '';
     el.productColorInput.value = product.color || '';
     el.productDpInput.value = product.current_dp;
@@ -590,7 +630,7 @@
     if (!product) return;
 
     el.historyModalTitle.textContent = `Price History`;
-    el.historyModalSubtitle.textContent = `${product.brand} ${product.model} ${product.variant ? `(${product.variant})` : ''} • Current: DP ${formatCurrency(product.current_dp)} | MOP ${formatCurrency(product.current_mop)} | MRP ${formatCurrency(product.current_mrp)}`;
+    el.historyModalSubtitle.innerHTML = `${escapeHtml(product.brand)} ${escapeHtml(product.model)} <span class="variant-tag">${escapeHtml(product.variant || 'Standard')}</span> • Current: DP ${formatCurrency(product.current_dp)} | MOP ${formatCurrency(product.current_mop)} | MRP ${formatCurrency(product.current_mrp)}`;
 
     try {
       const historyRecords = await window.dbService.fetchPriceHistory(productId);
@@ -789,7 +829,7 @@
     const product = state.products.find(p => p.id === productId) || await window.dbService.getProductById(productId);
     if (!product) return;
 
-    el.imeiModalSubtitle.textContent = `${product.brand} ${product.model} ${product.variant ? `(${product.variant})` : ''} • Base MOP: ${formatCurrency(product.current_mop)}`;
+    el.imeiModalSubtitle.innerHTML = `${escapeHtml(product.brand)} ${escapeHtml(product.model)} <span class="variant-tag">${escapeHtml(product.variant || 'Standard')}</span> • Base MOP: ${formatCurrency(product.current_mop)}`;
     resetImeiForm();
 
     await loadImeisForCurrentProduct();
@@ -1483,6 +1523,7 @@
       await loadBrands();
       // Select the newly added brand in the product modal
       el.productBrandSelect.value = created.name;
+      refreshProductModelOptions(created.name);
     } catch (err) {
       showToast(err.message || 'Failed to add brand', 'error');
     }
@@ -1536,7 +1577,7 @@
     const product = state.products.find(p => p.id === productId) || await window.dbService.getProductById(productId);
     if (!product) return;
 
-    el.deleteProductDetails.textContent = `${product.brand} ${product.model} ${product.variant ? `(${product.variant})` : ''} - DP: ${formatCurrency(product.current_dp)}`;
+    el.deleteProductDetails.innerHTML = `${escapeHtml(product.brand)} ${escapeHtml(product.model)} <span class="variant-tag">${escapeHtml(product.variant || 'Standard')}</span> - DP: ${formatCurrency(product.current_dp)}`;
     el.deleteModalOverlay.classList.add('active');
   }
 
@@ -1645,11 +1686,12 @@
     };
     const render = products => {
       if (!products.length) {
-        el.priceListBody.innerHTML = '<tr><td colspan="5" class="price-list-message">No products found.</td></tr>';
+        el.priceListBody.innerHTML = '<tr><td colspan="6" class="price-list-message">No products found.</td></tr>';
         return;
       }
       el.priceListBody.innerHTML = products.map(product => `<tr>
         <td>${escape(product.brand || '')}</td><td>${escape(product.model || '')}</td>
+        <td><span class="variant-tag">${escape(product.variant || 'Standard')}</span></td>
         <td class="right">${formatMoney.format(Number(product.current_dp ?? product.dp) || 0)}</td>
         <td class="right">${formatMoney.format(Number(product.current_mop ?? product.mop) || 0)}</td>
         <td class="right">${formatMoney.format(Number(product.current_mrp ?? product.mrp) || 0)}</td>
@@ -1667,7 +1709,7 @@
     } catch (err) {
       if (loadSequence !== priceListLoadSequence) return;
       console.error('Could not load price list:', err);
-      el.priceListBody.innerHTML = '<tr><td colspan="5" class="price-list-message">Could not load prices. Please refresh.</td></tr>';
+      el.priceListBody.innerHTML = '<tr><td colspan="6" class="price-list-message">Could not load prices. Please refresh.</td></tr>';
     } finally {
       if (loadSequence === priceListLoadSequence) {
         el.btnRefreshPrices.disabled = false;
@@ -1751,6 +1793,7 @@
     el.btnCloseProductModal.addEventListener('click', closeProductModal);
     el.btnCancelProduct.addEventListener('click', closeProductModal);
     el.productForm.addEventListener('submit', handleProductFormSubmit);
+    el.productBrandSelect.addEventListener('change', () => refreshProductModelOptions());
     el.btnInlineAddBrand.addEventListener('click', openBrandModal);
     
     // Scanner trigger for product form IMEI field

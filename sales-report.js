@@ -100,7 +100,7 @@
             <td>${escapeHtml(soldAt)}</td>
             <td><span class="report-brand">${escapeHtml(item.brand || 'Unknown')}</span></td>
             <td>${escapeHtml(item.model || '—')}</td>
-            <td>${escapeHtml(item.variant || 'Standard')}</td>
+            <td><span class="variant-tag">${escapeHtml(item.variant || 'Standard')}</span></td>
             <td><span class="report-imei">${escapeHtml(item.imei || '—')}</span></td>
             <td class="money-neutral">${formatMoney(item.entry_dp || 0)}</td>
             <td class="money-positive">${formatMoney(item.mop || 0)}</td>
