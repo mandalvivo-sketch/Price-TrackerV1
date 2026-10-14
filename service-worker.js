@@ -1,15 +1,20 @@
-const CACHE_NAME = 'mobile-price-tracker-v1';
+const CACHE_NAME = 'mobile-price-tracker-v5';
 const APP_SHELL = [
   './',
   './index.html',
   './sold.html',
   './summary.html',
+  './price-list.html',
+  './accessory-price-list.html',
   './style.css',
   './sold.css',
   './summary.css',
+  './price-list.css',
   './app.js',
   './sold.js',
   './summary.js',
+  './price-list.js',
+  './accessory-price-list.js',
   './supabase.js',
   './html5-qrcode.min.js',
   './manifest.json',

@@ -25,6 +25,8 @@
     scannerTarget: 'imeiModal', // 'imeiModal' | 'productForm'
     draggedBrandName: null
   };
+  let productLoadSequence = 0;
+  let priceListLoadSequence = 0;
 
   // DOM Elements Cache
   const el = {
@@ -47,6 +49,18 @@
     btnCloseMenu: document.getElementById('btnCloseMenu'),
     sideMenu: document.getElementById('sideMenu'),
     sideMenuOverlay: document.getElementById('sideMenuOverlay'),
+    headerActions: document.getElementById('headerActions'),
+    headerTitle: document.querySelector('#titleText h1'),
+    searchBoxWrap: document.getElementById('searchBoxWrap'),
+    searchScanResult: document.getElementById('searchScanResult'),
+    brandFiltersWrapper: document.getElementById('brandFiltersWrapper'),
+    summaryBar: document.getElementById('summaryBar'),
+    dashboardMainView: document.getElementById('dashboardMainView'),
+    priceListMainView: document.getElementById('priceListMainView'),
+    btnOpenPriceList: document.getElementById('btnOpenPriceList'),
+    btnRefreshPrices: document.getElementById('btnRefreshPrices'),
+    btnBackToDashboard: document.getElementById('btnBackToDashboard'),
+    priceListBody: document.getElementById('priceListBody'),
     btnExportBackup: document.getElementById('btnExportBackup'),
     btnSyncLocal: document.getElementById('btnSyncLocal'),
     btnRestoreBackup: document.getElementById('btnRestoreBackup'),
@@ -258,11 +272,14 @@
           renderDeleteBrandOptions();
         });
       }
-      pill.addEventListener('click', () => {
+      pill.addEventListener('click', async () => {
         const brand = pill.getAttribute('data-brand');
         if (state.selectedBrand !== brand) {
           state.selectedBrand = brand;
           renderBrandPills();
+          // Filter the local cache first so the tap responds without waiting on
+          // the network. The request token prevents an older response winning.
+          await loadProducts(true);
           loadProducts();
         }
       });
@@ -278,11 +295,25 @@
     el.productBrandSelect.innerHTML = defaultOption + optionsHtml;
   }
 
-  async function loadProducts() {
+  async function loadProducts(localOnly = false) {
+    const loadSequence = ++productLoadSequence;
     try {
-      const products = await window.dbService.fetchProducts(state.searchQuery, state.selectedBrand);
+      const products = await window.dbService.fetchProducts(state.searchQuery, state.selectedBrand, localOnly);
+      if (loadSequence !== productLoadSequence) return;
       state.products = products;
-      state.entryPrices = await window.dbService.fetchInitialPrices(products.map(product => product.id));
+      renderProducts();
+      // Price history is supplementary to the list; don't make the brand
+      // result wait for this additional round trip.
+      const productIds = products.map(product => product.id);
+      const [entryPrices, imeiCounts] = await Promise.all([
+        window.dbService.fetchInitialPrices(productIds, localOnly),
+        window.dbService.fetchImeiCounts(productIds, localOnly)
+      ]);
+      if (loadSequence !== productLoadSequence) return;
+      state.entryPrices = entryPrices;
+      products.forEach(product => {
+        product.imei_count = imeiCounts[product.id] || 0;
+      });
       renderProducts();
     } catch (err) {
       console.error('Error loading products:', err);
@@ -1091,15 +1122,21 @@
 
         width: {
 
-          ideal: 1920
+          ideal: 1280
 
         },
 
         height: {
 
-          ideal: 1080
+          ideal: 720
 
-        }
+        },
+
+        advanced: [
+
+          { focusMode: 'continuous' }
+
+        ]
 
       }
 
@@ -1135,25 +1172,25 @@
 
     state.isScanning = true;
 
-    // Give Chrome/Android camera a moment to initialise
+    // Apply autofocus after the browser has attached the camera track.
 
     setTimeout(async () => {
 
       await enableContinuousFocus();
 
-    }, 700);
+    }, 500);
 
-    // Try again after the camera has fully settled
+    // Some mobile browsers accept focus constraints only after startup settles.
 
     setTimeout(async () => {
 
       await enableContinuousFocus();
 
-    }, 1800);
+    }, 1500);
 
   }
 
-  async function enableContinuousFocus() {
+  async function enableContinuousFocusLegacy() {
 
   if (!state.html5QrCode) return;
 
@@ -1280,6 +1317,42 @@
   }
 
 }
+
+  async function enableContinuousFocus() {
+    if (!state.html5QrCode || !state.isScanning) return;
+
+    try {
+      const video = document.querySelector('#reader video');
+      const track = video?.srcObject?.getVideoTracks?.()[0];
+      const capabilities = track?.getCapabilities?.() ||
+        (typeof state.html5QrCode.getRunningTrackCapabilities === 'function'
+          ? state.html5QrCode.getRunningTrackCapabilities()
+          : null);
+      const focusModes = capabilities?.focusMode;
+      const constraints = { advanced: [{ focusMode: 'continuous' }] };
+
+      if (!Array.isArray(focusModes) || focusModes.includes('continuous')) {
+        if (track?.applyConstraints) {
+          await track.applyConstraints(constraints);
+          return;
+        }
+        if (typeof state.html5QrCode.applyVideoConstraints === 'function') {
+          await state.html5QrCode.applyVideoConstraints(constraints);
+          return;
+        }
+      }
+
+      if (Array.isArray(focusModes) && focusModes.includes('single-shot')) {
+        const singleShot = { advanced: [{ focusMode: 'single-shot' }] };
+        if (track?.applyConstraints) await track.applyConstraints(singleShot);
+        else if (typeof state.html5QrCode.applyVideoConstraints === 'function') {
+          await state.html5QrCode.applyVideoConstraints(singleShot);
+        }
+      }
+    } catch (err) {
+      console.info('Camera autofocus constraint was not accepted; using browser default focus.', err);
+    }
+  }
 
   async function onBarcodeScanned(scannedCode) {
     if (state.isProcessingScan) return;
@@ -1546,6 +1619,61 @@
     el.appIcon.setAttribute('aria-expanded', String(isOpen));
   }
 
+  function setMainView(view) {
+    const showPrices = view === 'prices';
+    el.dashboardMainView.classList.toggle('hidden', showPrices);
+    el.priceListMainView.classList.toggle('hidden', !showPrices);
+    el.searchBoxWrap.classList.toggle('hidden', showPrices);
+    el.searchScanResult.classList.toggle('hidden', showPrices);
+    el.brandFiltersWrapper.classList.toggle('hidden', showPrices);
+    el.summaryBar.classList.toggle('hidden', showPrices);
+    el.headerActions.classList.toggle('hidden', showPrices);
+    el.fabAddProduct.classList.toggle('hidden', showPrices);
+    el.headerTitle.textContent = showPrices ? 'Price List' : 'Price Tracker';
+    if (showPrices) loadPriceList();
+  }
+
+  async function loadPriceList() {
+    const loadSequence = ++priceListLoadSequence;
+    const formatMoney = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+    const escape = value => {
+      const node = document.createElement('span');
+      node.textContent = value == null ? '' : String(value);
+      return node.innerHTML;
+    };
+    const render = products => {
+      if (!products.length) {
+        el.priceListBody.innerHTML = '<tr><td colspan="5" class="price-list-message">No products found.</td></tr>';
+        return;
+      }
+      el.priceListBody.innerHTML = products.map(product => `<tr>
+        <td>${escape(product.brand || '')}</td><td>${escape(product.model || '')}</td>
+        <td class="right">${formatMoney.format(Number(product.current_dp ?? product.dp) || 0)}</td>
+        <td class="right">${formatMoney.format(Number(product.current_mop ?? product.mop) || 0)}</td>
+        <td class="right">${formatMoney.format(Number(product.current_mrp ?? product.mrp) || 0)}</td>
+      </tr>`).join('');
+    };
+    el.btnRefreshPrices.disabled = true;
+    el.btnRefreshPrices.textContent = 'Loading…';
+    try {
+      const cachedProducts = await window.dbService.fetchProducts('', 'ALL', true);
+      if (loadSequence !== priceListLoadSequence) return;
+      render(cachedProducts);
+      const liveProducts = await window.dbService.fetchProducts('', 'ALL');
+      if (loadSequence !== priceListLoadSequence) return;
+      render(liveProducts);
+    } catch (err) {
+      if (loadSequence !== priceListLoadSequence) return;
+      console.error('Could not load price list:', err);
+      el.priceListBody.innerHTML = '<tr><td colspan="5" class="price-list-message">Could not load prices. Please refresh.</td></tr>';
+    } finally {
+      if (loadSequence === priceListLoadSequence) {
+        el.btnRefreshPrices.disabled = false;
+        el.btnRefreshPrices.textContent = '↻ Refresh';
+      }
+    }
+  }
+
   async function exportBackup() {
     try {
       const backup = await window.dbService.createBackup();
@@ -1597,6 +1725,12 @@
       openBrandModal();
       setMenuOpen(false);
     });
+    el.btnOpenPriceList.addEventListener('click', () => {
+      setMenuOpen(false);
+      setMainView('prices');
+    });
+    el.btnRefreshPrices.addEventListener('click', loadPriceList);
+    el.btnBackToDashboard.addEventListener('click', () => setMainView('dashboard'));
     el.btnExportBackup.addEventListener('click', exportBackup);
     el.btnSyncLocal.addEventListener('click', syncOnlineData);
     el.btnRestoreBackup.addEventListener('click', () => el.backupFileInput.click());
@@ -1746,14 +1880,18 @@
     updateNetworkNotice();
     window.addEventListener('online', updateNetworkNotice);
     window.addEventListener('offline', updateNetworkNotice);
-    try {
-      await window.dbService.verifyConnection();
-    } catch (err) {
-      console.warn('Supabase startup check failed, using local database:', err);
-    }
     updateConnectionStatus();
-    await loadBrands();
-    await loadProducts();
+    // Paint the last known data immediately; refresh from Supabase in parallel.
+    try {
+      const cachedBrands = JSON.parse(localStorage.getItem('mpt_local_brands') || '[]');
+      if (cachedBrands.length) {
+        state.brands = cachedBrands;
+        renderBrandPills();
+        renderBrandSelectOptions();
+      }
+    } catch (_) {}
+    await loadProducts(true);
+    await Promise.all([loadBrands(), loadProducts()]);
   }
 
   // Boot up when DOM is ready

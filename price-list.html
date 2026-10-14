@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Price List · Mobile Price Tracker</title>
+  <link rel="stylesheet" href="style.css?v=20260832" />
+  <link rel="stylesheet" href="price-list.css?v=20261014" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="header-top">
+        <div class="brand-title">
+          <div class="app-icon">₹</div>
+          <div class="title-text">
+            <h1>Price List</h1>
+            <div class="status-tag"><span class="status-dot" id="statusDot"></span><span id="statusLabel">Loading...</span></div>
+          </div>
+        </div>
+        <div class="header-actions"><a class="btn btn-secondary btn-sm" href="index.html">← Dashboard</a></div>
+      </div>
+    </header>
+
+    <main class="main-content price-list-content">
+      <section class="price-list-heading">
+        <div><p class="eyebrow">PRODUCT PRICES</p><h2>Brand and model prices</h2></div>
+        <button class="btn btn-secondary btn-sm" id="btnRefreshPrices" type="button">↻ Refresh</button>
+      </section>
+      <div class="price-list-wrap">
+        <table class="price-list-table">
+          <thead><tr><th>Brand</th><th>Model</th><th class="right">DP</th><th class="right">MOP</th><th class="right">MRP</th></tr></thead>
+          <tbody id="priceListBody"><tr><td colspan="5" class="price-list-message">Loading prices…</td></tr></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+  <script src="supabase.js?v=20260832"></script>
+  <script src="price-list.js?v=20261014"></script>
+</body>
+</html>

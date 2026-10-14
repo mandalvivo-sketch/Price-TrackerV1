@@ -1105,8 +1105,8 @@ class SupabaseService {
 
   // ================= PRODUCTS API ================= //
 
-  async fetchProducts(searchQuery = '', brandFilter = '') {
-    if (this.isLive && this.client) {
+  async fetchProducts(searchQuery = '', brandFilter = '', localOnly = false) {
+    if (!localOnly && this.isLive && this.client) {
       try {
         let query = this.client
           .from('products')
@@ -1123,26 +1123,8 @@ class SupabaseService {
             current_dp: Number(p.current_dp !== undefined && p.current_dp !== null ? p.current_dp : (p.dp !== undefined && p.dp !== null ? p.dp : 0)),
             current_mop: Number(p.current_mop !== undefined && p.current_mop !== null ? p.current_mop : (p.mop !== undefined && p.mop !== null ? p.mop : 0)),
             current_mrp: Number(p.current_mrp !== undefined && p.current_mrp !== null ? p.current_mrp : (p.mrp !== undefined && p.mrp !== null ? p.mrp : 0)),
-            imei_count: 0
+            imei_count: Number(p.imei_count || 0)
           }));
-
-          // Safely fetch IMEI counts without breaking if table empty or relation missing
-          try {
-            const { data: allImeis } = await this.client.from('imeis').select('product_id');
-            if (allImeis && Array.isArray(allImeis)) {
-              const countMap = {};
-              allImeis.forEach(i => {
-                if (i && i.product_id) {
-                  countMap[i.product_id] = (countMap[i.product_id] || 0) + 1;
-                }
-              });
-              products.forEach(p => {
-                p.imei_count = countMap[p.id] || 0;
-              });
-            }
-          } catch (cntErr) {
-            console.warn('Could not fetch IMEI count:', cntErr);
-          }
 
           // If search query is provided
           if (searchQuery && searchQuery.trim()) {
@@ -1173,8 +1155,9 @@ class SupabaseService {
           // Sort in JavaScript so missing updated_at column never crashes query
           products.sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime());
 
-          // Sync fetched products to local storage cache
-          if (products.length > 0) {
+          // Keep the complete unfiltered list as the offline/instant-filter
+          // cache. A brand or search result must never replace that cache.
+          if (products.length > 0 && (!brandFilter || brandFilter === 'ALL') && !searchQuery.trim()) {
             try {
               localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
             } catch (_) {}
@@ -1191,8 +1174,14 @@ class SupabaseService {
     let products = JSON.parse(localStorage.getItem(STORAGE_KEYS.PRODUCTS) || '[]');
     const allImeis = JSON.parse(localStorage.getItem(STORAGE_KEYS.IMEIS) || '[]');
 
+    const imeiCounts = new Map();
+    allImeis.forEach(imei => {
+      const productId = String(imei.product_id);
+      imeiCounts.set(productId, (imeiCounts.get(productId) || 0) + 1);
+    });
+
     products = products.map(p => {
-      const count = allImeis.filter(i => String(i.product_id) === String(p.id)).length;
+      const count = imeiCounts.get(String(p.id)) || 0;
       return {
         ...p,
         current_dp: Number(p.current_dp !== undefined && p.current_dp !== null ? p.current_dp : (p.dp !== undefined && p.dp !== null ? p.dp : 0)),
@@ -1225,6 +1214,33 @@ class SupabaseService {
     // Order by updated_at or created_at descending
     products.sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime());
     return products;
+  }
+
+  async fetchImeiCounts(productIds = [], localOnly = false) {
+    const ids = [...new Set(productIds.filter(Boolean))];
+    const counts = {};
+    if (!localOnly && this.isLive && this.client && ids.length) {
+      try {
+        const { data, error } = await this.client
+          .from('imeis')
+          .select('product_id')
+          .in('product_id', ids);
+        if (!error && Array.isArray(data)) {
+          data.forEach(row => {
+            counts[row.product_id] = (counts[row.product_id] || 0) + 1;
+          });
+          return counts;
+        }
+      } catch (err) {
+        console.warn('Could not fetch IMEI counts:', err);
+      }
+    }
+
+    const localImeis = JSON.parse(localStorage.getItem(STORAGE_KEYS.IMEIS) || '[]');
+    localImeis.forEach(row => {
+      if (ids.includes(row.product_id)) counts[row.product_id] = (counts[row.product_id] || 0) + 1;
+    });
+    return counts;
   }
 
   async fetchAllImeis() {
@@ -1564,12 +1580,12 @@ class SupabaseService {
 
   // Returns the first recorded (entry) prices for products that have since
   // changed. Products without a price change intentionally have no entry here.
-  async fetchInitialPrices(productIds = []) {
+  async fetchInitialPrices(productIds = [], localOnly = false) {
     const ids = productIds.filter(Boolean);
     if (!ids.length) return {};
 
     let records = [];
-    if (this.isLive && this.client) {
+    if (!localOnly && this.isLive && this.client) {
       try {
         const { data, error } = await this.client
           .from('price_history')

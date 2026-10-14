@@ -6,6 +6,7 @@
   <title>Mobile Price Tracker</title>
   <meta name="description" content="Mobile price tracking system with live history, IMEI scanning, and Supabase integration." />
   <link rel="stylesheet" href="style.css?v=20260831" />
+  <link rel="stylesheet" href="price-list.css?v=20261014" />
   <!-- Supabase JS Client via CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Bundled locally so barcode scanning works without relying on a CDN. -->
@@ -70,6 +71,7 @@
 
     <!-- Main Content: Current Price List -->
     <main class="main-content" id="mainContent">
+      <div id="dashboardMainView">
 
       <!-- Mobile/Tablet Compact Card View -->
       <div class="product-list" id="productListContainer">
@@ -98,6 +100,22 @@
         <button class="btn btn-primary" id="btnEmptyAdd">+ Add First Mobile</button>
       </div>
 
+      </div>
+      <section id="priceListMainView" class="price-list-content hidden" aria-labelledby="priceListTitle">
+        <div class="price-list-heading">
+          <div><p class="eyebrow">PRODUCT PRICES</p><h2 id="priceListTitle">Brand and model prices</h2></div>
+          <div class="header-actions">
+            <button class="btn btn-secondary btn-sm" id="btnRefreshPrices" type="button">↻ Refresh</button>
+            <button class="btn btn-primary btn-sm" id="btnBackToDashboard" type="button">← Dashboard</button>
+          </div>
+        </div>
+        <div class="price-list-wrap">
+          <table class="price-list-table">
+            <thead><tr><th>Brand</th><th>Model</th><th class="right">DP</th><th class="right">MOP</th><th class="right">MRP</th></tr></thead>
+            <tbody id="priceListBody"><tr><td colspan="5" class="price-list-message">Open Price List to load prices.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
     </main>
 
     <!-- Floating Action Button for Fast Mobile Entry -->
@@ -121,11 +139,13 @@
     <div class="side-menu-group">
       <div class="side-menu-group-label">Accessories</div>
       <a class="side-menu-link" href="accessory-stock.html">🎧 <span>Accessory Stock</span></a>
+      <a class="side-menu-link" href="accessory-price-list.html">💰 <span>Accessories Price List</span></a>
       <a class="side-menu-link" href="accessories-summary.html">📈 <span>Accessories Summary</span></a>
     </div>
 
     <div class="side-menu-group">
       <div class="side-menu-group-label">Reports</div>
+      <button class="side-menu-link" id="btnOpenPriceList" type="button">💰 <span>Price List</span></button>
       <a class="side-menu-link" href="summary.html">📦 <span>Stock Summary</span></a>
       <a class="side-menu-link" href="sold.html">🧾 <span>Sold IMEI</span></a>
       <a class="side-menu-link" href="sales-report.html">📊 <span>Sales Report Details</span></a>
@@ -586,6 +606,6 @@
 
   <!-- Application Logic Scripts -->
   <script src="supabase.js?v=20260832"></script>
-  <script src="app.js?v=20260832"></script>
+  <script src="app.js?v=20261016"></script>
 </body>
 </html>

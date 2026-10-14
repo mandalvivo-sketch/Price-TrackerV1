@@ -1,0 +1,15 @@
+.price-list-content { padding-top: 8px; }
+.price-list-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.price-list-heading h2 { margin: 0; }
+.price-list-wrap { overflow-x: auto; background: var(--surface, #fff); border: 1px solid var(--border, #e2e8f0); border-radius: 14px; box-shadow: 0 8px 24px rgba(15, 23, 42, .06); }
+.price-list-table { width: 100%; border-collapse: collapse; min-width: 560px; }
+.price-list-table th, .price-list-table td { padding: 13px 16px; text-align: left; border-bottom: 1px solid var(--border, #e2e8f0); }
+.price-list-table th { color: #64748b; background: #f8fafc; font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; }
+.price-list-table td { color: #1e293b; }
+.price-list-table tbody tr:last-child td { border-bottom: 0; }
+.price-list-table .right { text-align: right; font-variant-numeric: tabular-nums; }
+.price-list-message { text-align: center !important; color: #64748b !important; padding: 28px !important; }
+@media (max-width: 600px) {
+  .price-list-heading { align-items: center; }
+  .price-list-table th, .price-list-table td { padding: 11px 12px; }
+}
