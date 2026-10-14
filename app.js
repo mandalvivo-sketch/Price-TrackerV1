@@ -43,7 +43,7 @@
     desktopTableBody: document.getElementById('desktopTableBody'),
     emptyState: document.getElementById('emptyState'),
     fabAddProduct: document.getElementById('fabAddProduct'),
-    btnOpenAddModal: document.getElementById('btnOpenAddModal'),
+    btnHeaderPriceList: document.getElementById('btnHeaderPriceList'),
     btnEmptyAdd: document.getElementById('btnEmptyAdd'),
     offlineNotice: document.getElementById('offlineNotice'),
     appIcon: document.getElementById('appIcon'),
@@ -862,10 +862,6 @@
         const mopVal = i.mop !== null && i.mop !== undefined ? i.mop : (product ? product.current_mop : null);
         const mrpVal = i.mrp !== null && i.mrp !== undefined ? i.mrp : (product ? product.current_mrp : null);
 
-        const customPriceBadge = (i.dp !== null && i.dp !== undefined) || (i.mop !== null && i.mop !== undefined) || (i.mrp !== null && i.mrp !== undefined)
-          ? `<span style="font-size:10px; font-weight:700; color:var(--primary); background:rgba(37,99,235,0.08); padding:1px 5px; border-radius:3px;">Custom Price</span>`
-          : '';
-
         const noteBadge = i.notes
           ? `<span class="imei-notes-tag" title="Note: ${escapeHtml(i.notes)}">📝 ${escapeHtml(i.notes)}</span>`
           : '';
@@ -878,7 +874,7 @@
                 <button type="button" class="imei-copy-btn" data-imei="${escapeHtml(i.imei)}" title="Copy IMEI">
                   📋 Copy
                 </button>
-                ${customPriceBadge}
+                <button type="button" class="imei-sell-btn" data-imei="${escapeHtml(i.imei)}" title="Record sale for this IMEI">💰 Sell</button>
               </div>
               <div class="imei-actions-group">
                 <button type="button" class="imei-btn-action edit" data-edit-id="${i.id}" title="Edit / Modify IMEI">
@@ -936,6 +932,13 @@
       });
 
       // Attach Copy handlers
+      el.imeiItemsList.querySelectorAll('.imei-sell-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const imei = btn.getAttribute('data-imei');
+          if (imei) window.location.href = `sold.html?imei=${encodeURIComponent(imei)}`;
+        });
+      });
+
       el.imeiItemsList.querySelectorAll('.imei-copy-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
           const text = btn.getAttribute('data-imei');
@@ -1787,7 +1790,7 @@
     }
 
     // Add Product Modal Triggers
-    el.btnOpenAddModal.addEventListener('click', openAddProductModal);
+    el.btnHeaderPriceList.addEventListener('click', () => setMainView('prices'));
     el.fabAddProduct.addEventListener('click', openAddProductModal);
     el.btnEmptyAdd.addEventListener('click', openAddProductModal);
     el.btnCloseProductModal.addEventListener('click', closeProductModal);
