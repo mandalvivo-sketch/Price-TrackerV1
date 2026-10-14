@@ -229,6 +229,30 @@ class SupabaseService {
            message.includes('network request failed');
   }
 
+  async withNetworkRetry(operation, label) {
+    let lastNetworkError = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const result = await operation();
+        // supabase-js can resolve with { error: TypeError('Failed to fetch') }
+        // instead of rejecting the promise. Treat both forms as retryable.
+        if (result?.error && this.isNetworkError(result.error)) {
+          lastNetworkError = result.error;
+        } else {
+          return result;
+        }
+      } catch (error) {
+        if (!this.isNetworkError(error)) throw error;
+        lastNetworkError = error;
+      }
+
+      if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    const reason = lastNetworkError?.message || 'Fetch failed';
+    throw new Error(`${label} request failed after retry (${reason}). Your internet may be working; check browser request blocking and Supabase settings.`);
+  }
+
   init() {
     const config = this.getConfig();
     if (config.url && config.anonKey && window.supabase) {
@@ -1415,11 +1439,10 @@ class SupabaseService {
     // dashboard edits to appear briefly and then revert after reload.
     let existing = null;
     if (this.isLive && this.client) {
-      const { data, error } = await this.client
-        .from('products')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
+      const { data, error } = await this.withNetworkRetry(
+        () => this.client.from('products').select('*').eq('id', id).maybeSingle(),
+        'Reading the product'
+      );
       if (error) throw new Error(`Could not read product before update: ${error.message}`);
       if (!data) throw new Error('Product not found in Supabase');
       existing = data;
@@ -1459,14 +1482,17 @@ class SupabaseService {
     let updatedProductResult;
 
     if (this.isLive && this.client) {
-      // Update the CURRENT price first and verify that Supabase actually
-      // returned the updated row. Never silently fall back to LocalStorage.
-      const { data, error } = await this.client
-        .from('products')
-        .update(fullPayload)
-        .eq('id', id)
-        .select('*')
-        .maybeSingle();
+      // Use a POST upsert for edits. This has the same conflict-safe update
+      // semantics as PATCH, while following the POST path used by product
+      // creation (some local browser/network setups block PATCH requests).
+      const { data, error } = await this.withNetworkRetry(
+        () => this.client
+          .from('products')
+          .upsert({ id, ...fullPayload }, { onConflict: 'id' })
+          .select('*')
+          .maybeSingle(),
+        'Price update'
+      );
 
       if (error) throw new Error(`Price update failed: ${error.message}`);
       if (!data) throw new Error('Price update was not saved. Check Supabase RLS policies.');
