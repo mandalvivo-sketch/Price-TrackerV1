@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mobile-price-tracker-v5';
+const CACHE_NAME = 'mobile-price-tracker-v6';
 const APP_SHELL = [
   './',
   './index.html',

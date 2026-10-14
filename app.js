@@ -307,7 +307,9 @@
       const productIds = products.map(product => product.id);
       const [entryPrices, imeiCounts] = await Promise.all([
         window.dbService.fetchInitialPrices(productIds, localOnly),
-        window.dbService.fetchImeiCounts(productIds, localOnly)
+        typeof window.dbService.fetchImeiCounts === 'function'
+          ? window.dbService.fetchImeiCounts(productIds, localOnly)
+          : Promise.resolve({})
       ]);
       if (loadSequence !== productLoadSequence) return;
       state.entryPrices = entryPrices;
